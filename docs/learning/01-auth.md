@@ -442,4 +442,5 @@ Supabase Storage.
 | `/auth/set-password` ohne Session | → `/login` (DAL) ✓ |
 | `/login?error=invalid_link` / `?error=toString` | Hinweis / nichts ✓ |
 | „Passwort vergessen“ mit unbekannter Adresse | neutrale Bestätigung ✓ |
-| Echte Einladung / echter Reset per Mail | nach Einrichtung der Vorlagen (manuell) |
+| Echte Einladung / echter Reset per Mail (Vorlagen aus Storage) | manuell getestet ✓ |
+| Link zweimal geklickt | → `/login?error=invalid_link` ✓ |
