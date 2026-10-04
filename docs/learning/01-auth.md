@@ -107,3 +107,72 @@ Versicherung, dass Server-Code nie im Browser-Bundle landet.
 Der Server-Client wird in jeder Funktion neu erzeugt (`await createClient()`).
 Ein globaler, geteilter Client wäre gefährlich: Auf dem Server laufen Requests
 verschiedener Nutzer im selben Prozess – deren Sessions dürfen sich nie mischen.
+
+## Schritt 3 – Proxy: Session erneuern und weiterleiten
+
+> Doku: `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`,
+> `…/03-api-reference/03-file-conventions/proxy.md`
+
+### Middleware heißt jetzt Proxy
+
+Seit Next.js 16 heißt `middleware.ts` → `proxy.ts`, die exportierte Funktion
+`middleware` → `proxy`. Funktional gleich, aber er läuft jetzt in der
+**Node.js-Runtime** (vorher Edge). Es gibt genau eine `proxy.ts` im Projekt-Root.
+
+### Der Ablauf eines Requests
+
+```
+Browser ──GET /dashboard──▶ proxy.ts
+                              │ getUser()  ──▶ Supabase Auth: Token gültig? ggf. erneuern
+                              │
+                ┌─────────────┴──────────────┐
+          kein User                       User ok
+                │                            │
+     307 Redirect → /login         NextResponse.next() + neue Cookies
+                                             │
+                                     app/dashboard/page.tsx rendert
+```
+
+### Warum Cookies an zwei Stellen gesetzt werden
+
+Nach einem Token-Refresh setzt `setAll` die neuen Cookies
+
+1. auf den **Request** – damit die Server Components *in diesem* Request schon
+   das neue Token sehen,
+2. auf die **Response** – damit der Browser sie speichert.
+
+Bei einer Weiterleitung entsteht eine *neue* Response; die Cookies müssen
+dorthin kopiert werden (`redirectWithCookies`). Vergisst man das, laufen
+Browser- und Server-Session auseinander → scheinbar zufällige Logouts.
+
+### `getSession()` vs. `getClaims()` vs. `getUser()`
+
+| Methode | Prüft | Netzwerk | Auf dem Server für Auth? |
+|---|---|---|---|
+| `getSession()` | nichts – liest nur das Cookie | nein | **niemals** (Cookie kann gefälscht sein) |
+| `getClaims()` | JWT-Signatur lokal (nur asymmetrische Keys) | nein* | ja |
+| `getUser()` | fragt den Auth-Server | ja | ja |
+
+\* Bei HS256 (gemeinsames JWT-Secret, wie bei unserer self-hosted Instanz) kann
+die App die Signatur nicht selbst prüfen – `getClaims()` fällt dann auf
+`getUser()` zurück. Deshalb nutzen wir direkt `getUser()`.
+
+### Proxy = optimistische Prüfung, nicht die Sicherheitsgrenze
+
+Die Next-Doku betont: Der Proxy ist kein vollständiger Schutz. Server Actions
+sind eigene POST-Endpunkte, und ein Matcher kann Pfade auslassen. Die
+verbindliche Prüfung gehört nah an die Daten → **Data Access Layer** (Schritt 4).
+
+### Der `matcher`
+
+Ohne Matcher läuft der Proxy bei *jedem* Request – auch für jedes Bild und JS-Bundle.
+Der negative Lookahead `(?!…)` schließt statische Dateien aus.
+
+### Getestet
+
+| Pfad | Erwartung (ohne Login) | Ergebnis |
+|---|---|---|
+| `/`, `/dashboard` | 307 → `/login` | ✓ |
+| `/login`, `/auth/confirm` | öffentlich (noch 404, Seiten fehlen) | ✓ |
+| `/authxyz` | 307 → `/login` (nicht mit `/auth` verwechselt) | ✓ |
+| `/next.svg` | 200, Proxy läuft nicht | ✓ |
