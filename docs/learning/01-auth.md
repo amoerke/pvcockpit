@@ -176,3 +176,52 @@ Der negative Lookahead `(?!…)` schließt statische Dateien aus.
 | `/login`, `/auth/confirm` | öffentlich (noch 404, Seiten fehlen) | ✓ |
 | `/authxyz` | 307 → `/login` (nicht mit `/auth` verwechselt) | ✓ |
 | `/next.svg` | 200, Proxy läuft nicht | ✓ |
+
+## Schritt 4 – Data Access Layer (DAL)
+
+> Doku: `node_modules/next/dist/docs/01-app/02-guides/authentication.md`,
+> `…/02-guides/data-security.md`
+
+### Warum doppelt prüfen, wenn der Proxy schon prüft?
+
+Der Proxy ist eine **Vorab-Prüfung** für gute UX (schnelle Weiterleitung).
+Er ist aber keine Sicherheitsgrenze:
+
+- **Server Actions** sind eigene POST-Endpunkte. Eine Prüfung *auf der Seite*
+  schützt die Actions auf dieser Seite nicht.
+- Ein **Matcher** kann Pfade auslassen – ein Tippfehler in der Regex, und eine
+  Seite ist ungeschützt.
+- **Defense in Depth:** Mehrere unabhängige Schichten. Fällt eine weg, hält die nächste.
+
+Deshalb: `lib/dal.ts` ist die eine Stelle, die verbindlich sagt „dieser Request
+gehört zu Nutzer X“. Alles, was Login voraussetzt, ruft zuerst `verifySession()`.
+(Und in Meilenstein 2 kommt mit **RLS** in Postgres noch eine dritte Schicht dazu.)
+
+```
+Proxy (optimistisch, UX)  →  DAL verifySession() (verbindlich)  →  RLS in Postgres (Daten)
+```
+
+### React `cache()`
+
+```ts
+export const verifySession = cache(async () => { … });
+```
+
+`cache()` merkt sich das Ergebnis **für einen Server-Request**. Rufen Layout,
+Seite und drei Komponenten `verifySession()` auf, geht trotzdem nur ein Aufruf
+an den Auth-Server. Nach dem Request ist der Cache weg – Nutzer teilen sich nie
+ein Ergebnis. (Nicht verwechseln mit `"use cache"` – das ist ein persistenter
+Cache über Requests hinweg und für nutzerspezifische Daten ungeeignet.)
+
+### DTO statt komplettem User-Objekt
+
+`verifySession()` gibt nur `{ id, email }` zurück. Was nicht herausgegeben wird,
+kann nicht versehentlich als Prop an eine Client Component und damit in den
+Browser wandern.
+
+### `redirect()` wirft
+
+`redirect("/login")` wirft intern eine spezielle Exception, die Next.js in eine
+Weiterleitung übersetzt. Der Rückgabetyp ist `never` – TypeScript weiß also,
+dass `user` danach gesetzt ist. Folge für später: `redirect()` **nicht** in ein
+`try/catch` packen, sonst fängt man die Weiterleitung selbst ab.
