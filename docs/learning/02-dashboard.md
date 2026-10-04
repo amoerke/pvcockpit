@@ -52,3 +52,55 @@ gesetzt und nirgends gespeichert.
 
 `from(process.env.SUPABASE_TABLE)` wäre für TypeScript nur „irgendein String“
 → keine Spaltentypen mehr. Der Tabellenname steht deshalb als fester Text im Code.
+
+## Schritt 10 – Lesezugriff: Rechte und Row Level Security
+
+> Datei: `supabase/migrations/0001_solar_readings_read_access.sql`
+> Doku: https://supabase.com/docs/guides/database/postgres/row-level-security
+
+### Ausgangslage
+
+RLS war aktiv, aber **ohne eine einzige Policy**. Postgres verweigert dann
+alles („default deny“): Eingeloggte Nutzer hätten 0 Zeilen gesehen – ohne
+Fehlermeldung. Nur der Pi konnte schreiben, weil `service_role` das Attribut
+`BYPASSRLS` hat.
+
+### Zwei Schichten
+
+| Schicht | Frage | Fehlt die Erlaubnis … |
+|---|---|---|
+| `GRANT` / `REVOKE` | *Welche Operation* darf eine Rolle auf der Tabelle ausführen? | Fehler `permission denied` |
+| RLS-Policy | *Welche Zeilen* sieht/ändert sie dabei? | 0 Zeilen, kein Fehler |
+
+Supabase gibt `anon` und `authenticated` auf neuen Tabellen in `public`
+zunächst **alle** Rechte – die eigentliche Absicherung übernimmt dann RLS.
+Wir ziehen zusätzlich die Rechte ein (Defense in Depth):
+
+- `anon` → nichts
+- `authenticated` → nur `SELECT`
+- `service_role` (Pi) → unverändert, umgeht RLS
+
+### Die Rollen in Supabase
+
+| Rolle | Wer | Woher |
+|---|---|---|
+| `anon` | Anfragen nur mit Anon-Key, ohne Login | JWT mit `role: anon` |
+| `authenticated` | eingeloggte Nutzer | Access-Token nach dem Login |
+| `service_role` | Server/Dienste mit dem Service-Key (Pi) | umgeht RLS |
+| `postgres` | Studio-SQL-Editor, Migrationen | Tabellenbesitzer |
+
+PostgREST schaltet für jede Anfrage per `set role` auf die Rolle aus dem JWT
+um. Genau das simulieren die Prüf-Abfragen am Ende der Migration mit
+`set local role authenticated` innerhalb einer Transaktion.
+
+### `using (true)` – bewusst ohne Eigentümer-Bedingung
+
+Typisch ist `using (user_id = auth.uid())`: Jeder sieht nur seine Zeilen.
+Hier gehören die Messwerte zur Anlage, nicht zu einem Nutzer – alle
+Eingeladenen sehen dasselbe. Das ist eine **bewusste** Entscheidung und steht
+so im Kommentar der Policy, damit es niemand für ein Versehen hält.
+
+### RLS und Realtime
+
+Supabase Realtime prüft für jede neue Zeile, ob der Empfänger sie laut RLS
+lesen dürfte. Ohne diese SELECT-Policy kämen auch über Realtime keine Daten an.
