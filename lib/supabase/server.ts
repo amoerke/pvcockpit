@@ -18,13 +18,15 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import type { Database } from "./database.types";
 import { supabaseAnonKey, supabaseUrl } from "./env";
 
 // `async`, weil `cookies()` seit Next.js 15 ein Promise liefert.
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  // <Database>: macht alle Abfragen typsicher (Tabellen, Spalten, Rückgabetypen).
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       // Supabase fragt alle Cookies auf einmal ab und sucht sich seine
       // `sb-…-auth-token`-Cookies selbst heraus (große Tokens werden auf

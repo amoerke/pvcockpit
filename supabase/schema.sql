@@ -1,0 +1,38 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.solar_readings (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  ts timestamp with time zone NOT NULL UNIQUE,
+  pv_power integer,
+  raw_power_block jsonb,
+  battery_power integer,
+  grid_power integer,
+  total_grid_power integer,
+  load_power integer,
+  inverter_power integer,
+  direction_pv smallint,
+  direction_battery smallint,
+  direction_grid smallint,
+  soc numeric,
+  bat_temp numeric,
+  pv1_voltage numeric,
+  pv1_current numeric,
+  pv1_power integer,
+  pv2_voltage numeric,
+  pv2_current numeric,
+  pv2_power integer,
+  pv_today_kwh numeric,
+  pv_total_kwh numeric,
+  bat_charge_today_kwh numeric,
+  bat_discharge_today_kwh numeric,
+  load_today_kwh numeric,
+  grid_export_today_kwh numeric,
+  grid_import_today_kwh numeric,
+  offset14_power integer,
+  raw_string_block jsonb,
+  pv3_voltage numeric,
+  pv3_current numeric,
+  pv3_power integer,
+  CONSTRAINT solar_readings_pkey PRIMARY KEY (id)
+);

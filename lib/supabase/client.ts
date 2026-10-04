@@ -12,8 +12,10 @@
  */
 import { createBrowserClient } from "@supabase/ssr";
 
+import type { Database } from "./database.types";
 import { supabaseAnonKey, supabaseUrl } from "./env";
 
 export function createClient() {
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  // <Database>: macht alle Abfragen typsicher (Tabellen, Spalten, Rückgabetypen).
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
 }

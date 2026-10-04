@@ -35,3 +35,4 @@ Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-We
 ## Kapitel
 
 - [Kapitel 1 – Authentifizierung](01-auth.md)
+- [Kapitel 2 – Dashboard](02-dashboard.md)
