@@ -128,3 +128,70 @@ und Schreibversuche enden mit `permission denied`.
 
 Supabase Realtime prüft für jede neue Zeile, ob der Empfänger sie laut RLS
 lesen dürfte. Ohne diese SELECT-Policy kämen auch über Realtime keine Daten an.
+
+## Schritt 11 – Verschachteltes Layout und Theme-Umschalter
+
+> Doku: `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/layout.md`,
+> https://github.com/pacocoursey/next-themes
+
+### Layouts verschachteln
+
+```
+app/layout.tsx                 <html>, <body>, ThemeProvider
+└── app/dashboard/layout.tsx   Kopfzeile, Navigation, Theme-Umschalter, Abmelden
+    ├── page.tsx               /dashboard          (verifySession)
+    └── history/page.tsx       /dashboard/history  (verifySession)
+```
+
+Ein `layout.tsx` umschließt alle Seiten in seinem Ordner. Beim Wechsel
+zwischen den Unterseiten rendert nur die Seite neu, das Layout bleibt stehen
+(**Partial Rendering**) – schnell, aber: Das Layout ist **keine** Auth-Prüfung.
+Es ruft `verifySession()` nur für die Anzeige der E-Mail; die verbindliche
+Prüfung steht weiter in jeder `page.tsx`. Dank `cache()` kostet der doppelte
+Aufruf nichts.
+
+### Server-Layout mit Client-Inseln
+
+Das Layout bleibt eine Server Component. Nur zwei kleine Teile sind Client
+Components, weil sie Hooks brauchen:
+
+| Komponente | Hook | Warum Client? |
+|---|---|---|
+| `DashboardNav` | `usePathname()` | aktiven Menüpunkt hervorheben – das Layout selbst bekommt Seitenwechsel nicht mit |
+| `ThemeToggle` | `useTheme()` | Wahl in `localStorage` lesen/schreiben |
+
+Der aktive Link trägt `aria-current="page"`: Screenreader sagen „aktuelle
+Seite“ an, und Tailwind stylt darüber (`aria-[current=page]:bg-muted`).
+
+### Das Theme-Problem beim Server-Rendering
+
+Der Server kennt die Theme-Wahl nicht (sie liegt im `localStorage` des
+Browsers). Naiv gebaut: Server liefert hell → Browser schaltet auf dunkel →
+**sichtbares Aufblitzen**.
+
+`next-themes` löst das mit einem kleinen Inline-Skript, das die Klasse `dark`
+am `<html>` setzt, **bevor** der Browser zeichnet. Folgen:
+
+- `<html suppressHydrationWarning>`: Das `<html>`-Element weicht absichtlich vom
+  Server-HTML ab. Die Unterdrückung gilt nur für dieses eine Element.
+  Anderswo wäre sie ein Warnsignal.
+- Im Umschalter hängt nichts Sichtbares direkt von `theme` ab (auf dem Server
+  `undefined`). Sonne/Mond stehen beide im HTML, CSS blendet eines aus
+  (`dark:hidden` / `hidden dark:block`).
+- `ThemeProvider` liegt in einer eigenen `"use client"`-Datei. Eine Client
+  Component darf Server Components als `children` bekommen – die Seiten
+  bleiben Server Components.
+
+### Base UI: `render` statt `asChild`
+
+```tsx
+<DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+```
+
+Unsere shadcn-Variante baut auf Base UI (nicht Radix). Statt `asChild` gibt
+man das Element an, als das gerendert werden soll.
+
+### Getestet
+
+- E2E: 12/12 grün (neu: Navigation inkl. `aria-current`, Theme-Wechsel bleibt nach Reload)
+- Browser-Konsole in Hell und Dunkel: keine Hydration-Warnungen

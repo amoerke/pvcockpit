@@ -25,4 +25,34 @@ test.describe("Mit Login", () => {
     await page.goto("/login");
     await expect(page).toHaveURL("/dashboard");
   });
+
+  test("Navigation wechselt zwischen Übersicht und Verlauf", async ({ page }) => {
+    await page.goto("/dashboard");
+    const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
+
+    await nav.getByRole("link", { name: "Verlauf" }).click();
+    await expect(page).toHaveURL("/dashboard/history");
+    // aria-current="page" markiert den aktiven Menüpunkt.
+    await expect(nav.getByRole("link", { name: "Verlauf" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await nav.getByRole("link", { name: "Übersicht" }).click();
+    await expect(page).toHaveURL("/dashboard");
+  });
+
+  test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
+    await page.goto("/dashboard");
+
+    await page.getByRole("button", { name: "Farbschema wählen" }).click();
+    await page.getByRole("menuitemradio", { name: "Dunkel" }).click();
+
+    // next-themes setzt die Klasse "dark" am <html>-Element …
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+
+    // … und merkt sich die Wahl über einen Seitenwechsel hinweg.
+    await page.reload();
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  });
 });
