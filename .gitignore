@@ -49,3 +49,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /e2e/.auth/
+
+# Supabase CLI (lokaler Zwischenstand)
+/supabase/.temp/
