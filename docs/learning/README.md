@@ -34,4 +34,4 @@ Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-We
 
 ## Kapitel
 
-<!-- Pro Meilenstein entsteht hier ein Kapitel, z. B. 01-auth.md -->
+- [Kapitel 1 – Authentifizierung](01-auth.md)
