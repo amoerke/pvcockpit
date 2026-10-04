@@ -363,3 +363,83 @@ In `app/dashboard/page.tsx` ist eine TODO-Stelle markiert. Hinweise:
 Testen: Einloggen → Dashboard → Button → `/login`. Danach `/dashboard` direkt
 aufrufen → muss wieder auf `/login` landen. In den DevTools (Application →
 Cookies) sind die `sb-…-auth-token`-Cookies verschwunden.
+
+## Schritt 7 – Einladung und „Passwort vergessen“
+
+### Der Ablauf
+
+```
+Einladung (Studio) ─┐                       ┌─ "Passwort vergessen" (/auth/forgot-password)
+                    ▼                       ▼
+            GoTrue verschickt Mail (Vorlage aus supabase/templates/*.html)
+                    │
+   Link: /auth/confirm?token_hash=…&type=invite|recovery&next=/auth/set-password
+                    ▼
+   Route Handler GET: verifyOtp() → Session-Cookies → redirect(next)
+                    ▼
+   /auth/set-password: verifySession() → Formular → updateUser({ password })
+                    ▼
+   /dashboard
+```
+
+### Route Handler
+
+`app/auth/confirm/route.ts` ist keine Seite, sondern ein Endpunkt: Er exportiert
+eine Funktion pro HTTP-Methode (`GET`, `POST` …) und gibt eine Response oder einen
+Redirect zurück. Cookies setzen ist hier erlaubt.
+
+> Doku: `node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md`
+
+### Warum eigene Mail-Vorlagen?
+
+Der Standard-Link von Supabase leitet nach der Prüfung mit den Tokens im
+**URL-Fragment** weiter (`#access_token=…`). Das Fragment schickt der Browser
+nie an den Server. Unsere Vorlagen verlinken stattdessen direkt auf
+`/auth/confirm?token_hash=…` – der Server bekommt den Token und tauscht ihn
+selbst per `verifyOtp()` gegen eine Session.
+
+Bei self-hosted GoTrue zeigen `MAILER_TEMPLATES_INVITE` / `_RECOVERY` auf eine
+**URL**, von der das HTML geladen wird. Die Quelldateien liegen versioniert in
+`supabase/templates/`, ausgeliefert werden sie aus einem öffentlichen Bucket in
+Supabase Storage.
+
+### Sicherheit im Detail
+
+- **Open Redirect:** `next` stammt aus der URL. `safeNextPath()` erlaubt nur
+  relative Pfade (`/…`, aber nicht `//…` oder `/\…` – Browser lesen `//host`
+  als fremde Domain).
+- **Typen-Allowlist:** `/auth/confirm` akzeptiert nur `invite` und `recovery`.
+- **User Enumeration:** „Passwort vergessen“ antwortet immer gleich – egal ob
+  die Adresse existiert.
+- **Fehlercodes per URL:** `/login?error=…` zeigt nur Texte aus einer festen
+  Liste (`Object.hasOwn`, damit `?error=toString` nichts Geerbtes liefert).
+- **`verifySession()` in der Action** `setPassword` – nicht nur in der Seite.
+- **Passwortregeln:** ≥ 12 Zeichen, keine Komplexitätspflicht (NIST/BSI), ≤ 72
+  wegen bcrypt. Serverseitig zusätzlich `GOTRUE_PASSWORD_MIN_LENGTH`.
+
+### Neues in Next.js
+
+- **`searchParams` ist ein Promise** (seit Next.js 15): `const { error } = await searchParams;`
+- **`PageProps<"/login">`** – globaler Hilfstyp, typisiert Params und SearchParams
+  passend zur Route.
+- **`<Link>`** statt `<a>` für interne Links: Navigation ohne Neuladen + Prefetching.
+
+### Zod: `refine()` über mehrere Felder
+
+```ts
+.refine((d) => d.password === d.confirmPassword, {
+  error: "Die Passwörter stimmen nicht überein.",
+  path: ["confirmPassword"], // an welchem Feld der Fehler erscheint
+});
+```
+
+### Getestet
+
+| Fall | Ergebnis |
+|---|---|
+| `/auth/confirm` ohne/mit falschem Token | → `/login?error=invalid_link`, Log `otp_expired` ✓ |
+| `/auth/confirm?type=signup` | abgelehnt ✓ |
+| `/auth/set-password` ohne Session | → `/login` (DAL) ✓ |
+| `/login?error=invalid_link` / `?error=toString` | Hinweis / nichts ✓ |
+| „Passwort vergessen“ mit unbekannter Adresse | neutrale Bestätigung ✓ |
+| Echte Einladung / echter Reset per Mail | nach Einrichtung der Vorlagen (manuell) |

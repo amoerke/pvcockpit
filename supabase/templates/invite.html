@@ -1,0 +1,35 @@
+<!--
+  E-Mail-Vorlage: Einladung (GoTrue / Supabase Auth)
+
+  Wird von GoTrue per HTTP geladen → Variable MAILER_TEMPLATES_INVITE.
+  Platzhalter in Go-Template-Syntax:
+    {{ .SiteURL }}    = GOTRUE_SITE_URL (z. B. http://localhost:3000)
+    {{ .TokenHash }}  = Einmal-Token, den /auth/confirm per verifyOtp() prüft
+    {{ .Email }}      = Adresse des eingeladenen Nutzers
+
+  Wichtig: Der Link führt direkt in UNSERE App (/auth/confirm), nicht zum
+  Standard-Endpunkt /auth/v1/verify. So kommt der Token als Query-Parameter
+  beim Server an (statt im URL-Fragment #…, das der Server nie sieht).
+-->
+<!doctype html>
+<html lang="de">
+  <body style="font-family: system-ui, sans-serif; color: #171717; line-height: 1.5">
+    <h2>Du wurdest zum AmpereSolar Cockpit eingeladen</h2>
+    <p>Hallo,</p>
+    <p>
+      für <strong>{{ .Email }}</strong> wurde ein Zugang zum AmpereSolar Cockpit
+      angelegt. Klicke auf den Button, um dein Passwort festzulegen:
+    </p>
+    <p>
+      <a
+        href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/auth/set-password"
+        style="display: inline-block; padding: 10px 16px; background: #171717; color: #ffffff; text-decoration: none; border-radius: 8px"
+        >Einladung annehmen</a
+      >
+    </p>
+    <p style="color: #737373; font-size: 14px">
+      Der Link ist nur einmal gültig und läuft nach kurzer Zeit ab. Falls du
+      diese Einladung nicht erwartet hast, kannst du die E-Mail ignorieren.
+    </p>
+  </body>
+</html>

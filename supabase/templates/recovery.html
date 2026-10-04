@@ -1,0 +1,29 @@
+<!--
+  E-Mail-Vorlage: Passwort zurücksetzen (GoTrue / Supabase Auth)
+
+  Wird von GoTrue per HTTP geladen → Variable MAILER_TEMPLATES_RECOVERY.
+  Platzhalter und Hintergrund: siehe invite.html.
+-->
+<!doctype html>
+<html lang="de">
+  <body style="font-family: system-ui, sans-serif; color: #171717; line-height: 1.5">
+    <h2>Passwort zurücksetzen</h2>
+    <p>Hallo,</p>
+    <p>
+      für <strong>{{ .Email }}</strong> wurde ein neues Passwort für das
+      AmpereSolar Cockpit angefordert. Klicke auf den Button, um es festzulegen:
+    </p>
+    <p>
+      <a
+        href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/auth/set-password"
+        style="display: inline-block; padding: 10px 16px; background: #171717; color: #ffffff; text-decoration: none; border-radius: 8px"
+        >Neues Passwort festlegen</a
+      >
+    </p>
+    <p style="color: #737373; font-size: 14px">
+      Der Link ist nur einmal gültig und läuft nach kurzer Zeit ab. Falls du
+      das nicht angefordert hast, ignoriere diese E-Mail – dein bisheriges
+      Passwort bleibt gültig.
+    </p>
+  </body>
+</html>
