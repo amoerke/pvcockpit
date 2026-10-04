@@ -12,6 +12,7 @@
  */
 "use client";
 
+import { LogIn } from "lucide-react";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ export function LoginForm() {
       )}
 
       <Button type="submit" disabled={pending} className="w-full">
+        <LogIn data-icon="inline-start" />
         {pending ? "Anmelden …" : "Anmelden"}
       </Button>
     </form>

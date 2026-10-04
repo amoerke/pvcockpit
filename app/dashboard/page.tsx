@@ -10,14 +10,17 @@
  * (Partial Rendering). Eine Prüfung im Layout liefe also nicht bei jedem
  * Seitenwechsel. Seiten dagegen rendern bei jedem Aufruf.
  */
+import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
 
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { logout } from "@/lib/actions/auth";
 import { verifySession } from "@/lib/dal";
 
 export const metadata: Metadata = {
@@ -36,11 +39,12 @@ export default async function DashboardPage() {
 
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">{user.email}</span>
-
-          {/*
-            TODO (Übung): Logout-Button einbauen.
-            Die Server Action liegt in lib/actions/auth.ts → `logout`.
-          */}
+          <form action={logout}>
+            <Button variant="outline" type="submit">
+              <LogOut data-icon="inline-start" />
+              Abmelden
+            </Button>
+          </form>
         </div>
       </header>
 
