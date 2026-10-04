@@ -57,3 +57,53 @@ Damit nur eingeladene Nutzer hineinkommen und Auth-Mails zur App führen:
 | `ENABLE_PHONE_SIGNUP` / `_AUTOCONFIRM` | `false` | Nicht genutzt → aus |
 
 Bei Deployment später: `GOTRUE_SITE_URL` und Redirect-URLs um die echte Domain ergänzen.
+
+## Schritt 2 – Supabase-Clients für Browser und Server
+
+Pakete (Versionen exakt gepinnt, Lockfile committet – Schutz vor Supply-Chain-Überraschungen):
+`@supabase/supabase-js` und `@supabase/ssr`.
+
+### Drei Orte, an denen Code läuft
+
+| Ort | Beispiel | Cookies lesen | Cookies schreiben | Client |
+|---|---|---|---|---|
+| Browser | Client Component (`"use client"`) | ja (`document.cookie`) | ja | `lib/supabase/client.ts` |
+| Server, beim Rendern | Server Component (`page.tsx`) | ja | **nein** | `lib/supabase/server.ts` |
+| Server, bei Aktionen | Server Action, Route Handler, Proxy | ja | ja | `lib/supabase/server.ts` / Proxy |
+
+Warum dürfen Server Components keine Cookies setzen? Cookies werden als
+HTTP-Header (`Set-Cookie`) verschickt. Beim Rendern streamt Next.js die Seite
+aber bereits zum Browser – die Header sind dann schon raus.
+
+### Warum liegt die Session in Cookies?
+
+Bei einer reinen Browser-App (SPA) speichert Supabase die Session im
+`localStorage`. Den sieht aber nur der Browser. Damit auch der Server bei jedem
+Request weiß, wer eingeloggt ist, speichert `@supabase/ssr` die Tokens in
+Cookies – die schickt der Browser automatisch mit.
+
+### Die Cookie-Schnittstelle `getAll` / `setAll`
+
+Der Server-Client bekommt zwei Funktionen:
+
+- `getAll()` – liefert alle Cookies des Requests. Supabase sucht sich seine
+  `sb-<projekt>-auth-token`-Cookies heraus (große Tokens werden auf
+  `…auth-token.0`, `….1` usw. aufgeteilt).
+- `setAll(cookies, headers)` – schreibt neue Tokens. Der zweite Parameter
+  enthält Cache-Header (`Cache-Control` usw.), damit ein CDN keine Antwort mit
+  fremden Session-Cookies zwischenspeichert. Relevant im Proxy.
+
+> Ältere Tutorials zeigen `get`/`set`/`remove` oder das Paket
+> `@supabase/auth-helpers-nextjs` – beides ist veraltet.
+
+### `server-only`
+
+`import "server-only"` in `lib/supabase/server.ts` lässt den Build fehlschlagen,
+sobald die Datei in eine Client Component importiert wird. Eine billige
+Versicherung, dass Server-Code nie im Browser-Bundle landet.
+
+### Ein Client pro Request
+
+Der Server-Client wird in jeder Funktion neu erzeugt (`await createClient()`).
+Ein globaler, geteilter Client wäre gefährlich: Auf dem Server laufen Requests
+verschiedener Nutzer im selben Prozess – deren Sessions dürfen sich nie mischen.
