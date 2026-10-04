@@ -44,3 +44,8 @@ next-env.d.ts
 
 # Playwright-MCP (Browser-Snapshots/Screenshots beim Testen)
 /.playwright-mcp/
+
+# Playwright (E2E-Tests)
+/test-results/
+/playwright-report/
+/e2e/.auth/

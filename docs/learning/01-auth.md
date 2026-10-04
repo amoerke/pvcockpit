@@ -444,3 +444,80 @@ Supabase Storage.
 | „Passwort vergessen“ mit unbekannter Adresse | neutrale Bestätigung ✓ |
 | Echte Einladung / echter Reset per Mail (Vorlagen aus Storage) | manuell getestet ✓ |
 | Link zweimal geklickt | → `/login?error=invalid_link` ✓ |
+
+## Schritt 8 – E2E-Tests mit Playwright
+
+> Doku: https://playwright.dev/docs/intro, https://playwright.dev/docs/auth
+
+```bash
+npm run test:e2e      # alle Tests, headless (startet `next dev` bei Bedarf selbst)
+npm run test:e2e:ui   # interaktive UI: Tests zuschauen, Schritt für Schritt debuggen
+npx playwright show-report   # HTML-Bericht des letzten Laufs
+```
+
+### Aufbau
+
+```
+playwright.config.ts      Projekte, baseURL, webServer, .env-Laden
+e2e/
+├── helpers.ts            getTestUser(), login(), AUTH_FILE
+├── auth.setup.ts         Projekt "setup": einmal einloggen → e2e/.auth/user.json
+├── auth.guest.spec.ts    Projekt "guest": Tests ohne Login (+ Login/Logout-Ablauf)
+└── session.auth.spec.ts  Projekt "authenticated": startet mit gespeicherter Session
+```
+
+### Projekte und `storageState`
+
+Statt sich in jedem Test neu einzuloggen, loggt sich das **Setup-Projekt**
+einmal ein und speichert Cookies per `storageState` in eine Datei. Das Projekt
+`authenticated` hängt davon ab (`dependencies: ["setup"]`) und lädt die Datei
+vor jedem Test.
+
+Falle: Ein **Logout** widerruft die Session serverseitig – die gespeicherte
+Datei wäre danach für alle anderen Tests wertlos. Der Login/Logout-Test läuft
+deshalb im Projekt `guest` mit einer eigenen, frischen Session.
+
+### Locators nach Rolle und Beschriftung
+
+```ts
+page.getByLabel("E-Mail")
+page.getByRole("button", { name: "Anmelden" })
+```
+
+Statt CSS-Selektoren (`.btn-primary`) sucht Playwright Elemente so, wie ein
+Mensch (oder Screenreader) sie wahrnimmt. Vorteile: robust gegen Styling-Änderungen
+und ein eingebauter Barrierefreiheits-Check – ein Feld ohne `<Label>` wäre nicht auffindbar.
+
+**Stolperstein:** Next.js rendert einen unsichtbaren *Route Announcer* mit
+`role="alert"`. Ein globales `getByRole("alert")` findet dann zwei Elemente,
+und Playwright bricht ab (*strict mode*). Lösung: auf `<main>` eingrenzen.
+
+### Automatisches Warten
+
+`await expect(page).toHaveURL("/dashboard")` wartet, bis die Bedingung
+erfüllt ist (Standard bis 5 s). Kein `sleep()` – das wäre entweder zu kurz
+(flaky) oder zu lang (langsam).
+
+### `.env` in Tests
+
+`playwright.config.ts` lädt die `.env`-Dateien über `loadEnvConfig` aus
+`@next/env` – genau wie `next dev`. Im Modus `NODE_ENV=test` würde Next.js
+`.env.local` absichtlich ignorieren; das zweite Argument `true` (Entwicklungsmodus)
+sorgt dafür, dass die E2E-Zugangsdaten aus `.env.local` ankommen.
+
+**Stolperstein beim ersten Lauf:** Das Testpasswort enthielt ein `#`. In
+`.env`-Dateien beginnt ein unquotiertes `#` einen **Kommentar** – der Wert wurde
+still abgeschnitten, das Passwort kam leer an. Ebenso gefährlich ist `$`: Next.js
+liest `$NAME` als Verweis auf eine andere Variable. Faustregel: Werte mit
+Sonderzeichen immer in `"Anführungszeichen"`.
+
+### Ergebnis
+
+```
+10 passed (3.0s)   – setup: 1, guest: 6, authenticated: 3
+```
+
+### Was nicht automatisiert getestet wird
+
+Einladung und Passwort-Reset per Mail: Dafür bräuchte es ein Test-Postfach
+(z. B. Mailpit). Diese Abläufe sind manuell bestätigt (Schritt 7).
