@@ -13,6 +13,25 @@
 | Theme | Umschalter Hell/Dunkel/System mit `next-themes` |
 | Tabelle | `solar_readings`, Name fest im Code (Typsicherheit) |
 
+### Datenmodell `solar_readings` (geklärt)
+
+- Ein Messwert pro Minute (Ø 60,7 s), ~1.440 Zeilen/Tag, ~400 MB/Jahr.
+- Leistungen in Watt, Vorzeichen aus Sicht des Hauses:
+
+| Feld | positiv | negativ |
+|---|---|---|
+| `pv_power` | Erzeugung | – |
+| `battery_power` | Batterie **entlädt** (liefert ans Haus) | Batterie **lädt** |
+| `grid_power` | **Netzbezug** | **Einspeisung** |
+| `load_power` | Hausverbrauch | – |
+
+- `direction_*`, `inverter_power`, `offset14_power`: ungenutzt (Vorzeichen reichen).
+- `total_grid_power`: Bedeutung ungeklärt. In den Daten gilt
+  `load_power = grid_power + total_grid_power` (nachts geprüft). Wird nicht
+  verwendet; Verbrauch kommt direkt aus `load_power`.
+- Tagesenergien aus den Wechselrichter-Zählern `*_today_kwh` (Tagesmaximum),
+  Tagesgrenzen in `Europe/Berlin`.
+
 ### Offene Punkte außerhalb dieses Projekts
 
 - **Pi-Service mit `service_role`-Key absichern:** Der Schlüssel darf *alles*
@@ -99,6 +118,11 @@ Typisch ist `using (user_id = auth.uid())`: Jeder sieht nur seine Zeilen.
 Hier gehören die Messwerte zur Anlage, nicht zu einem Nutzer – alle
 Eingeladenen sehen dasselbe. Das ist eine **bewusste** Entscheidung und steht
 so im Kommentar der Policy, damit es niemand für ein Versehen hält.
+
+### Geprüft
+
+Alle vier Prüf-Abfragen wie erwartet: `authenticated` liest alle Zeilen, `anon`
+und Schreibversuche enden mit `permission denied`.
 
 ### RLS und Realtime
 
