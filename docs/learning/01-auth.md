@@ -317,3 +317,49 @@ neu an. Ein nützlicher React-Trick, den man öfter braucht.
 | Leeres Formular | Feldfehler bei E-Mail und Passwort ✓ |
 | Unbekannte E-Mail / falsches Passwort | „E-Mail oder Passwort ist falsch.“, Server-Log `invalid_credentials` ✓ |
 | Erfolgreicher Login | → `/dashboard` (Seite folgt in Schritt 6) |
+
+## Schritt 6 – Geschütztes Dashboard und Logout
+
+### Wo gehört die Auth-Prüfung hin?
+
+| Ort | Geeignet? | Warum |
+|---|---|---|
+| `proxy.ts` | als Vorab-Prüfung | schnell, aber keine Sicherheitsgrenze |
+| `layout.tsx` | **nein** | Layouts rendern bei Navigation zwischen Unterseiten nicht neu (*Partial Rendering*) – die Prüfung liefe nicht bei jedem Seitenwechsel |
+| `page.tsx` | ja | rendert bei jedem Aufruf → `await verifySession()` |
+| Server Action / Datenabfrage | ja | eigene Endpunkte → jeweils `verifySession()` |
+
+> Doku: `authentication.md`, Abschnitt zu Layouts und Partial Rendering
+
+### `redirect()` in einer Server Component
+
+`app/page.tsx` rendert nichts, sondern ruft nur `redirect("/dashboard")`. Weil
+`redirect()` vor dem Streamen greift, antwortet Next.js direkt mit einer
+Weiterleitung.
+
+### Logout: POST statt Link
+
+`logout()` in `lib/actions/auth.ts` ist eine Server Action. Ein Link
+`<a href="/logout">` (GET) könnte ungewollt ausgelöst werden – durch
+Prefetching oder ein `<img src>` auf einer fremden Seite. Server Actions laufen
+immer per POST, und Next.js prüft den `Origin`-Header (CSRF-Schutz).
+
+`signOut({ scope: "local" })` beendet nur die Sitzung in diesem Browser
+(`"global"` – der Standard – würde alle Geräte abmelden). Das Refresh-Token wird
+widerrufen, die Cookies gelöscht. Ein schon ausgestelltes Access-Token bleibt
+bis zu seinem Ablauf (≤ 1 h) technisch gültig – JWTs kann man nicht zurückrufen.
+
+### Übung: Logout-Button
+
+In `app/dashboard/page.tsx` ist eine TODO-Stelle markiert. Hinweise:
+
+1. Ein `<form>` kann eine Server Action direkt als `action` bekommen – auch in
+   einer **Server Component**, ganz ohne `"use client"` und ohne `useActionState`.
+2. Der Button muss das Formular absenden (`type="submit"`).
+3. Die shadcn-`Button`-Komponente hat Varianten, z. B. `variant="outline"` oder
+   `"ghost"` (siehe `components/ui/button.tsx`).
+4. Bonus: Ein Icon aus `lucide-react` (z. B. `LogOut`) neben dem Text.
+
+Testen: Einloggen → Dashboard → Button → `/login`. Danach `/dashboard` direkt
+aufrufen → muss wieder auf `/login` landen. In den DevTools (Application →
+Cookies) sind die `sb-…-auth-token`-Cookies verschwunden.

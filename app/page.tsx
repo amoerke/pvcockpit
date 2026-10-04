@@ -1,13 +1,14 @@
-"use client";
-
-import { useState } from "react";
+/**
+ * Startseite "/" – hat keinen eigenen Inhalt, sondern leitet weiter.
+ *
+ * Nicht eingeloggt: Der Proxy hat bereits nach /login umgeleitet, bevor diese
+ * Seite überhaupt rendert. Eingeloggt: weiter zum Dashboard.
+ *
+ * redirect() funktioniert direkt in einer Server Component und antwortet mit
+ * einer Weiterleitung, ohne dass HTML gerendert wird.
+ */
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  const [count, setCount] = useState(0);
-
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center gap-6 bg-amber-50 font-sans dark:bg-zinc-950">
-
-    </div>
-  );
+  redirect("/dashboard");
 }
