@@ -225,3 +225,95 @@ Browser wandern.
 Weiterleitung übersetzt. Der Rückgabetyp ist `never` – TypeScript weiß also,
 dass `user` danach gesetzt ist. Folge für später: `redirect()` **nicht** in ein
 `try/catch` packen, sonst fängt man die Weiterleitung selbst ab.
+
+## Schritt 5 – shadcn/ui und Login mit Server Action
+
+> Doku: `node_modules/next/dist/docs/01-app/02-guides/forms.md`,
+> `…/01-getting-started/07-mutating-data.md`, `…/02-guides/server-actions.md`
+
+### shadcn/ui
+
+`npx shadcn@latest init` hat angelegt:
+
+- `components.json` – Konfiguration (Stil `base-nova`, Basis-Bibliothek **Base UI**, Farben als CSS-Variablen)
+- `app/globals.css` – Design-Tokens (`--background`, `--primary` …) für hell und dunkel
+- `components/ui/*` – die Komponenten als **eigener Quellcode**. Kein Blackbox-Paket:
+  Du kannst (und sollst) sie lesen und anpassen.
+- `lib/utils.ts` – `cn()` zum Zusammenführen von Tailwind-Klassen (Paket `cn` von shadcn)
+
+Zwei Korrekturen nach dem Init:
+- **`shadcn` → `devDependencies`.** Das Paket ist ein CLI-Werkzeug; zur Laufzeit wird
+  nur seine CSS-Datei beim Build importiert. Als Laufzeit-Abhängigkeit zog es
+  9 `npm audit`-Warnungen (über `fast-glob` → `braces`) in die Produktions-Abhängigkeiten.
+- **Schrift:** `globals.css` erwartet `--font-sans`, das Layout lieferte noch
+  `--font-geist-sans` → in `app/layout.tsx` angepasst.
+
+### Server Component + Client Component
+
+```
+app/login/
+├── page.tsx         Server Component – statisches Gerüst (Card, Titel, metadata)
+├── login-form.tsx   Client Component – Formular mit useActionState
+├── actions.ts       "use server" – die Server Action login()
+└── definitions.ts   Zod-Schema + LoginState-Typ (von beiden genutzt)
+```
+
+Faustregel: `"use client"` so tief wie möglich setzen. Nur das Formular braucht
+Interaktivität im Browser, die Seite drumherum nicht.
+
+Warum `definitions.ts`? Eine `"use server"`-Datei darf **nur async-Funktionen**
+exportieren – kein Schema, keine Konstanten.
+
+### Der Ablauf eines Logins
+
+```
+<form action={formAction}>  ──POST (FormData)──▶  login(prevState, formData)   [Server]
+                                                    1. Zod: safeParse
+                                                    2. signInWithPassword → setAll schreibt Cookies
+                                                    3. revalidatePath + redirect("/dashboard")
+       ◀── neuer State (Fehler) ODER Redirect ──────┘
+useActionState rendert neu
+```
+
+### `useActionState`
+
+```ts
+const [state, formAction, pending] = useActionState(login, initialState);
+```
+
+- `state` – was die Action zuletzt zurückgegeben hat (Fehler, eingegebene E-Mail)
+- `formAction` – an `<form action>`; ruft `login(state, formData)` auf
+- `pending` – `true`, solange die Action läuft (Button sperren)
+
+Weil wir `action=` statt `onSubmit` nutzen, funktioniert das Formular sogar
+ohne geladenes JavaScript (**Progressive Enhancement**).
+
+### Zod
+
+Alles aus `FormData` ist `string | File | null` – also nicht vertrauenswürdig.
+`LoginSchema.safeParse()` liefert entweder typsichere Daten oder Fehler pro Feld
+(`z.flattenError(error).fieldErrors`). Zod v4: Fehlermeldungen über `{ error: "…" }`.
+
+### Sicherheit im Detail
+
+- **Keine User Enumeration:** Immer „E-Mail oder Passwort ist falsch“, nie
+  „E-Mail unbekannt“. Den echten Fehlercode loggen wir nur serverseitig.
+- **`redirect()` außerhalb von `try/catch`** – es wirft intern.
+- **`revalidatePath("/", "layout")`** leert den Client-Router-Cache, damit keine
+  zwischengespeicherte „ausgeloggt“-Ansicht angezeigt wird.
+
+### Stolperstein: `defaultValue` und Base UI
+
+Nach einem Fehler soll die E-Mail im Feld stehen bleiben → `defaultValue={state.email}`.
+Ein *Default*wert darf sich aber nach dem ersten Rendern nicht ändern (Base UI
+warnt). Lösung: `key={state.email}` – ändert sich der Key, legt React das Feld
+neu an. Ein nützlicher React-Trick, den man öfter braucht.
+
+### Getestet (Browser, gegen die echte Supabase-Instanz)
+
+| Fall | Ergebnis |
+|---|---|
+| `/` ohne Login | → `/login` |
+| Leeres Formular | Feldfehler bei E-Mail und Passwort ✓ |
+| Unbekannte E-Mail / falsches Passwort | „E-Mail oder Passwort ist falsch.“, Server-Log `invalid_credentials` ✓ |
+| Erfolgreicher Login | → `/dashboard` (Seite folgt in Schritt 6) |
