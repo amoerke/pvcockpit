@@ -195,3 +195,86 @@ man das Element an, als das gerendert werden soll.
 
 - E2E: 12/12 grün (neu: Navigation inkl. `aria-current`, Theme-Wechsel bleibt nach Reload)
 - Browser-Konsole in Hell und Dunkel: keine Hydration-Warnungen
+
+## Schritt 12 + 13 – Erste echte Daten: Live-Kacheln und Energiefluss
+
+### Aufteilung der Dateien
+
+```
+lib/readings/live.ts     reine Logik: Spalten, Typ LiveReading, toLiveReading(), minutesSince()
+                         → KEIN server-only: wird ab Schritt 14 auch im Browser genutzt
+lib/data/readings.ts     DAL: getLatestReading() – server-only, verifySession(), Abfrage, DTO
+lib/format.ts            Intl-Formatierung: "2,4 kW", "21 %", "22:12" (Europe/Berlin)
+app/dashboard/
+├── page.tsx             async Server Component: Daten holen, leerer Zustand
+├── live-tiles.tsx       4 Kacheln          ┐ "neutrale" Komponenten: nur Props,
+├── energy-flow.tsx      Energiefluss       │ keine Hooks → laufen auf Server
+├── reading-status.tsx   "Stand: …"         ┘ UND im Browser
+└── error.tsx            Fehlerseite (Client Component, retry())
+```
+
+### Daten holen in einer Server Component
+
+```tsx
+export default async function DashboardPage() {
+  const latest = await getLatestReading();
+  …
+}
+```
+
+Kein `useEffect`, kein Lade-Spinner, keine API-Route: Die Komponente ist
+`async`, wartet auf die Daten, und der Browser bekommt fertiges HTML.
+
+### Vorzeichen an EINER Stelle übersetzen
+
+`toLiveReading()` macht aus `battery_power = -2300` die eindeutigen Felder
+`batteryChargeW = 2300`, `batteryDischargeW = 0`. Die Komponenten müssen die
+Vorzeichen-Konvention nicht kennen. `null` bleibt `null` und wird als „–“
+angezeigt – ein fehlender Messwert ist etwas anderes als 0 W.
+
+### Nur die nötigen Spalten
+
+`LIVE_COLUMNS` lädt 6 von 32 Spalten – die großen `raw_*`-JSON-Felder nicht.
+Der Typ `LiveRow` ist per `Pick<…>` aus denselben Spalten abgeleitet, damit
+Abfrage und Typ zusammenpassen.
+
+### Reinheit: `Date.now()` nicht im Render
+
+ESLint (React-Compiler-Regeln) meldete `Date.now()` in der Seite als Fehler:
+Komponenten sollen beim Rendern **rein** sein – gleiche Eingabe, gleiche
+Ausgabe. `Date.now()` liefert bei jedem Aufruf etwas anderes. Lösung: Das Alter
+berechnet die Datenfunktion (`getLatestReading` → `ageMinutes`), nicht die Komponente.
+
+### Zeitzonen
+
+`Intl.DateTimeFormat` ohne `timeZone` nutzt die Zeitzone des Rechners. Auf
+einem Server ist das oft UTC → „20:12“ statt „22:12“. Deshalb immer
+`timeZone: "Europe/Berlin"` angeben.
+
+### `error.tsx`
+
+Wirft eine Seite beim Rendern (z. B. Datenbank nicht erreichbar), zeigt
+Next.js `error.tsx` – Layout und Navigation bleiben stehen. `retry()` lädt neu.
+In Produktion sieht der Browser nur einen `digest`, nie die interne Meldung.
+
+> In dieser Next-Version heißt die Prop `retry` (laut `node_modules/next/dist/docs`);
+> ältere Tutorials zeigen `reset`.
+
+### Stolperstein: CSS-Grid Auto-Placement
+
+Das Energiefluss-Schema war zuerst verrutscht: Elemente mit nur `col-start-3`
+(ohne Zeile) schiebt CSS-Grid in die nächste freie Zelle. Lösung: jedem
+Element feste `col-start-*` **und** `row-start-*` geben.
+
+### Barrierefreiheit nebenbei
+
+- `role="meter"` + `aria-valuenow` am Ladezustands-Balken
+- `role="status"` an „Stand: …“ (wird ab Schritt 14 bei Updates angesagt)
+- `tabular-nums`: gleich breite Ziffern, Zahlen springen nicht
+
+### Beobachtung
+
+Die Leistungsbilanz geht nicht immer exakt auf (Beispiel: PV 2,2 kW + Netz 15 W
+≠ Batterie 2,3 kW + Haus 253 W). Mögliche Ursachen: der ungeklärte Anteil
+`total_grid_power`, Wandlerverluste, leicht versetzte Messzeitpunkte. Das
+Dashboard zeigt die Werte **wie gemessen**.
