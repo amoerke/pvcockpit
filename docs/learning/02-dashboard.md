@@ -18,17 +18,26 @@
 - Ein Messwert pro Minute (Ø 60,7 s), ~1.440 Zeilen/Tag, ~400 MB/Jahr.
 - Leistungen in Watt, Vorzeichen aus Sicht des Hauses:
 
+**Seit 06.10.2026 kommen die Livewerte aus den `sys_*`-Spalten** (Registerblock
+0x4200). Sie zeigen dieselben Werte wie die Ampere Home App, und die Bilanz geht
+auf (Abgleich am 06.10.2026: PV 1878 W = Batterie 1316 W + Haus 537 W + Netz 24 W).
+
 | Feld | positiv | negativ |
 |---|---|---|
-| `pv_power` | Erzeugung | – |
-| `battery_power` | Batterie **entlädt** (liefert ans Haus) | Batterie **lädt** |
-| `grid_power` | **Netzbezug** | **Einspeisung** |
-| `load_power` | Hausverbrauch | – |
+| `sys_pv_power` | Erzeugung **inkl. SolarMax** | nachts wenige W Standby → als 0 angezeigt |
+| `sys_battery_power` | Batterie **entlädt** (liefert ans Haus) | Batterie **lädt** |
+| `sys_grid_power` | **Netzbezug** | **Einspeisung** |
+| `sys_house_power` | Hausverbrauch | – |
 
-- `direction_*`, `inverter_power`, `offset14_power`: ungenutzt (Vorzeichen reichen).
-- `total_grid_power`: Bedeutung ungeklärt. In den Daten gilt
-  `load_power = grid_power + total_grid_power` (nachts geprüft). Wird nicht
-  verwendet; Verbrauch kommt direkt aus `load_power`.
+Ältere Zeilen (ohne `sys_*`) rechnet `toLiveReading()` als Rückfall um:
+
+- PV = `pv_power` (nur die zwei Stränge am Speicher) + `offset14_power`
+  (Register 0x40A3 „CT PV Power“ = der SolarMax 4600SP über Stromwandler).
+- Haus = PV + `battery_power` + `grid_power` aus der Bilanz.
+- `load_power` (0x40A0) wird **nicht** verwendet: Das Register liegt
+  systematisch zu hoch (abends beim Entladen oft 300 W und mehr). In den Daten
+  gilt exakt `load_power = |CT-Netz + total_grid_power|`.
+- `direction_*`, `inverter_power`: ungenutzt (Vorzeichen reichen).
 - Tagesenergien aus den Wechselrichter-Zählern `*_today_kwh` (Tagesmaximum),
   Tagesgrenzen in `Europe/Berlin`.
 
@@ -234,7 +243,7 @@ angezeigt – ein fehlender Messwert ist etwas anderes als 0 W.
 
 ### Nur die nötigen Spalten
 
-`LIVE_COLUMNS` lädt 6 von 32 Spalten – die großen `raw_*`-JSON-Felder nicht.
+`LIVE_COLUMNS` lädt 10 von rund 40 Spalten (sys_* plus Rückfallspalten) – die großen `raw_*`-JSON-Felder nicht.
 Der Typ `LiveRow` ist per `Pick<…>` aus denselben Spalten abgeleitet, damit
 Abfrage und Typ zusammenpassen.
 
@@ -274,7 +283,7 @@ Element feste `col-start-*` **und** `row-start-*` geben.
 
 ### Beobachtung
 
-Die Leistungsbilanz geht nicht immer exakt auf (Beispiel: PV 2,2 kW + Netz 15 W
-≠ Batterie 2,3 kW + Haus 253 W). Mögliche Ursachen: der ungeklärte Anteil
-`total_grid_power`, Wandlerverluste, leicht versetzte Messzeitpunkte. Das
-Dashboard zeigt die Werte **wie gemessen**.
+Mit den alten Spalten ging die Leistungsbilanz nicht auf (Beispiel: PV 2,2 kW +
+Netz 15 W ≠ Batterie 2,3 kW + Haus 253 W). Ursache war zum einen der fehlende
+SolarMax in `pv_power`, zum anderen das zu hohe `load_power`. Mit den
+`sys_*`-Spalten ist das behoben.

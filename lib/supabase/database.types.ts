@@ -48,6 +48,11 @@ export type Database = {
           pv3_voltage: number | null;
           pv3_current: number | null;
           pv3_power: number | null;
+          sys_pv_power: number | null;
+          sys_battery_power: number | null;
+          sys_grid_power: number | null;
+          sys_house_power: number | null;
+          sys_soc: number | null;
         };
         // Insert: Pflichtfelder ohne "?" (hier nur ts; id erzeugt die DB).
         Insert: {
@@ -83,6 +88,11 @@ export type Database = {
           pv3_voltage?: number | null;
           pv3_current?: number | null;
           pv3_power?: number | null;
+          sys_pv_power?: number | null;
+          sys_battery_power?: number | null;
+          sys_grid_power?: number | null;
+          sys_house_power?: number | null;
+          sys_soc?: number | null;
         };
         // Update: alles optional (nur geänderte Felder).
         Update: {
@@ -118,6 +128,11 @@ export type Database = {
           pv3_voltage?: number | null;
           pv3_current?: number | null;
           pv3_power?: number | null;
+          sys_pv_power?: number | null;
+          sys_battery_power?: number | null;
+          sys_grid_power?: number | null;
+          sys_house_power?: number | null;
+          sys_soc?: number | null;
         };
         Relationships: [];
       };

@@ -13,13 +13,27 @@ import type { Tables } from "@/lib/supabase/database.types";
  * Die Spalten, die das Live-Dashboard braucht. Als Konstante, damit
  * Abfrage (select) und Typ (Pick) garantiert zusammenpassen.
  * Die großen raw_*-JSON-Felder (~1/2 KB pro Zeile) laden wir bewusst nicht.
+ *
+ * Primärquelle sind die sys_*-Spalten (Registerblock 0x4200): Sie zeigen
+ * dieselben Werte wie die Ampere Home App – PV inklusive SolarMax, und eine
+ * Bilanz, die aufgeht. Die übrigen Spalten dienen nur als Rückfall für
+ * Zeilen von vor dem 06.10.2026, in denen sys_* noch fehlt.
  */
 export const LIVE_COLUMNS =
-  "ts, pv_power, battery_power, grid_power, load_power, soc" as const;
+  "ts, soc, sys_pv_power, sys_battery_power, sys_grid_power, sys_house_power, pv_power, offset14_power, battery_power, grid_power" as const;
 
 export type LiveRow = Pick<
   Tables<"solar_readings">,
-  "ts" | "pv_power" | "battery_power" | "grid_power" | "load_power" | "soc"
+  | "ts"
+  | "soc"
+  | "sys_pv_power"
+  | "sys_battery_power"
+  | "sys_grid_power"
+  | "sys_house_power"
+  | "pv_power"
+  | "offset14_power"
+  | "battery_power"
+  | "grid_power"
 >;
 
 /**
@@ -50,17 +64,48 @@ function splitBySign(value: number | null) {
   return { positive: Math.max(value, 0), negative: Math.max(-value, 0) };
 }
 
+/**
+ * Leistungswerte einer Zeile, bevorzugt aus den sys_*-Spalten.
+ *
+ * Rückfall für alte Zeilen (sys_* = null):
+ * - PV = Stränge (pv_power) + SolarMax (offset14_power, Register 0x40A3)
+ * - Haus = aus der Bilanz PV + Batterie + Netz. Das Register load_power
+ *   (0x40A0) wird bewusst NICHT verwendet – es liegt systematisch zu hoch.
+ */
+function powerValues(row: LiveRow) {
+  if (row.sys_pv_power !== null) {
+    return {
+      pv: row.sys_pv_power,
+      battery: row.sys_battery_power,
+      grid: row.sys_grid_power,
+      house: row.sys_house_power,
+    };
+  }
+
+  const pv =
+    row.pv_power === null ? null : row.pv_power + (row.offset14_power ?? 0);
+  const house =
+    pv === null || row.battery_power === null || row.grid_power === null
+      ? null
+      : Math.max(pv + row.battery_power + row.grid_power, 0);
+
+  return { pv, battery: row.battery_power, grid: row.grid_power, house };
+}
+
 export function toLiveReading(row: LiveRow): LiveReading {
   // Vorzeichen-Konvention der Anlage (siehe docs/learning/02-dashboard.md):
-  //   battery_power: positiv = entlädt (liefert ans Haus), negativ = lädt
-  //   grid_power:    positiv = Bezug aus dem Netz,          negativ = Einspeisung
-  const battery = splitBySign(row.battery_power);
-  const grid = splitBySign(row.grid_power);
+  //   Batterie: positiv = entlädt (liefert ans Haus), negativ = lädt
+  //   Netz:     positiv = Bezug aus dem Netz,          negativ = Einspeisung
+  const values = powerValues(row);
+  const battery = splitBySign(values.battery);
+  const grid = splitBySign(values.grid);
 
   return {
     timestamp: row.ts,
-    pvW: row.pv_power,
-    loadW: row.load_power,
+    // Nachts liefern die Wechselrichter wenige Watt Standby-Verbrauch als
+    // negative PV-Leistung – als Erzeugung ist das 0.
+    pvW: values.pv === null ? null : Math.max(values.pv, 0),
+    loadW: values.house,
     socPercent: row.soc,
     batteryDischargeW: battery.positive,
     batteryChargeW: battery.negative,
