@@ -287,3 +287,74 @@ Mit den alten Spalten ging die Leistungsbilanz nicht auf (Beispiel: PV 2,2 kW +
 Netz 15 W ≠ Batterie 2,3 kW + Haus 253 W). Ursache war zum einen der fehlende
 SolarMax in `pv_power`, zum anderen das zu hohe `load_power`. Mit den
 `sys_*`-Spalten ist das behoben.
+
+## Schritt 14 – Live-Updates mit Supabase Realtime
+
+> Dateien: `app/dashboard/live-dashboard.tsx`, `supabase/migrations/0002_solar_readings_realtime.sql`
+> Doku: https://supabase.com/docs/guides/realtime/postgres-changes
+
+### Server rendert zuerst, Client übernimmt
+
+```
+page.tsx (Server)           live-dashboard.tsx ("use client")
+  getLatestReading()  ──►     useState(initialReading)
+  fetchedAt                   useEffect: Realtime-Abo → setReading(...)
+                              rendert LiveTiles, EnergyFlow, ReadingStatus
+```
+
+- Der erste Wert kommt weiter vom Server: sofort sichtbar, kein Spinner.
+- Danach ersetzt jede neue Zeile aus Realtime den State.
+- `LiveTiles`, `EnergyFlow` und `ReadingStatus` blieben unverändert – als
+  „neutrale“ Komponenten (nur Props) laufen sie auf Server **und** Client.
+- Props von Server- an Client Components müssen serialisierbar sein
+  (schlichte Objekte, Strings, Zahlen – keine Funktionen, keine `Date`).
+
+### Datenbank: Publication
+
+Realtime sendet nur Änderungen an Tabellen in der Publication
+`supabase_realtime` (Migration 0002). Wer welche Zeile bekommt, entscheidet RLS
+– dieselbe SELECT-Policy wie für normale Abfragen.
+
+### `useEffect` mit Cleanup
+
+Ein Abo ist ein Seiteneffekt: im Effect öffnen, in der zurückgegebenen
+Cleanup-Funktion schließen (`supabase.removeChannel`). Im Dev-Modus baut React
+(Strict Mode) jeden Effect einmal testweise auf und wieder ab – ohne Cleanup
+gäbe es doppelte Abos. Der Uhr-Effect (`setInterval` / `clearInterval`) folgt
+demselben Muster.
+
+Ist der Effect **asynchron** (hier wegen `await setAuth()`), braucht es ein
+`cancelled`-Flag: Wird abgebaut, während das `await` noch läuft, darf danach
+kein Kanal mehr geöffnet werden.
+
+### Die Uhr läuft im Browser
+
+`ageMinutes` rechnet jetzt der Client aus `reading.timestamp` und einem
+`now`-State. `now` startet mit `fetchedAt` vom Server (gleiches HTML auf
+Server und Client → kein Hydration-Mismatch) und wird alle 30 s per
+`setInterval` aktualisiert. `Date.now()` steht nur im Effect bzw. im
+Event-Callback, nie im Render.
+
+### Stolperstein: Realtime lief als `anon`
+
+Symptom: Beim ersten neuen Messwert `RangeError: Invalid time value` in
+`formatTime`.
+
+Ursache: Der Kanal meldete sich sofort an. Der Login-Token wird aber erst kurz
+danach (über ein Auth-Ereignis) an Realtime weitergereicht. Das Abo lief also
+mit dem Anon-Key → Rolle `anon` → laut Migration 0001 kein Leserecht. Realtime
+schickte deshalb Zeilen **ohne Inhalt** plus `errors: ["Error 401: Unauthorized"]`,
+und `new Date(undefined)` warf.
+
+Lösung:
+
+- `await supabase.realtime.setAuth()` **vor** dem Abonnieren
+- `payload.errors` prüfen und den alten Wert stehen lassen, statt abzustürzen
+
+Gute Nachricht dabei: Die Rechte aus Migration 0001 haben genau das getan,
+wofür sie da sind.
+
+### Getestet
+
+Im Browser: Indikator zeigt „Live“, Kacheln und Energiefluss aktualisieren
+sich ohne Neuladen mit jedem neuen Messwert.

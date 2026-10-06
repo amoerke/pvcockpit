@@ -22,9 +22,7 @@ import {
 import { verifySession } from "@/lib/dal";
 import { getLatestReading } from "@/lib/data/readings";
 
-import { EnergyFlow } from "./energy-flow";
-import { LiveTiles } from "./live-tiles";
-import { ReadingStatus } from "./reading-status";
+import { LiveDashboard } from "./live-dashboard";
 
 export const metadata: Metadata = {
   title: "Übersicht – AmpereSolar Cockpit",
@@ -50,20 +48,12 @@ export default async function DashboardPage() {
     );
   }
 
-  // ageMinutes bezieht sich auf den Zeitpunkt, an dem der SERVER die Daten
-  // geholt hat. Die Anzeige bleibt danach stehen – sie zählt im Browser
-  // nicht weiter. Das ändert sich mit den Live-Updates in Schritt 14.
-  const { reading, ageMinutes } = latest;
-
+  // Server-Wert als Startwert; ab dann aktualisiert LiveDashboard im Browser
+  // per Realtime. Props an Client Components müssen serialisierbar sein –
+  // reading ist ein schlichtes Objekt, fetchedAt eine Zahl.
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Aktuell</h1>
-        <ReadingStatus timestamp={reading.timestamp} ageMinutes={ageMinutes} />
-      </div>
-
-      <LiveTiles reading={reading} />
-      <EnergyFlow reading={reading} />
+      <LiveDashboard initialReading={latest.reading} fetchedAt={latest.fetchedAt} />
     </main>
   );
 }

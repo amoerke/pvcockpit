@@ -3,8 +3,8 @@
  *
  * Weder "use client" noch "server-only": Die Komponente bekommt ihre Daten
  * als Props und rendert nur. Solche "neutralen" Komponenten funktionieren
- * auf beiden Seiten – heute rendert sie der Server, ab Schritt 14 rendert
- * sie zusätzlich eine Client Component mit Live-Daten.
+ * auf beiden Seiten – hier rendert sie die Client
+ * Component LiveDashboard mit Live-Daten (Erst-Render auf dem Server).
  */
 import { BatteryMedium, House, Sun, UtilityPole } from "lucide-react";
 import type { ReactNode } from "react";
@@ -63,7 +63,7 @@ function Tile({
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {/* tabular-nums: Ziffern gleich breit → Zahlen "springen" nicht,
-            wenn sich Werte ändern (wichtig ab Schritt 14 mit Live-Updates). */}
+            wenn sich Werte ändern (wichtig bei den Live-Updates). */}
         <p className="text-3xl font-semibold tabular-nums">{value}</p>
         {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
         {children}

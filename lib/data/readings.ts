@@ -16,7 +16,6 @@ import "server-only";
 import { verifySession } from "@/lib/dal";
 import {
   LIVE_COLUMNS,
-  minutesSince,
   toLiveReading,
   type LiveReading,
 } from "@/lib/readings/live";
@@ -24,8 +23,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export type LatestReading = {
   reading: LiveReading;
-  /** Alter des Messwerts in Minuten, zum Zeitpunkt der Abfrage. */
-  ageMinutes: number;
+  /** Zeitpunkt der Abfrage (ms seit 1970). Das Alter rechnet der Client. */
+  fetchedAt: number;
 };
 
 /**
@@ -55,12 +54,12 @@ export async function getLatestReading(): Promise<LatestReading | null> {
 
   if (!data) return null;
 
-  // Das Alter wird HIER berechnet, nicht in der Komponente: Date.now() ist
+  // Die Uhrzeit wird HIER gelesen, nicht in der Komponente: Date.now() ist
   // "unrein" (jeder Aufruf liefert etwas anderes). React-Komponenten sollen
   // beim Rendern rein sein – der React Compiler bzw. ESLint meldet
   // Date.now() im Render deshalb als Fehler. Eine Datenfunktion darf das.
   return {
     reading: toLiveReading(data),
-    ageMinutes: minutesSince(data.ts, Date.now()),
+    fetchedAt: Date.now(),
   };
 }

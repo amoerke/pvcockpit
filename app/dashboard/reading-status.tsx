@@ -21,7 +21,7 @@ export function ReadingStatus({
 
   return (
     <p
-      // role="status": Änderungen (ab Schritt 14 live) werden von
+      // role="status": Live-Änderungen werden von
       // Screenreadern höflich angesagt.
       role="status"
       className={cn(
