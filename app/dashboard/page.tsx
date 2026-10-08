@@ -20,9 +20,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { verifySession } from "@/lib/dal";
-import { getLatestReading } from "@/lib/data/readings";
+import { getLatestReading, getTodayTotals } from "@/lib/data/readings";
 
 import { LiveDashboard } from "./live-dashboard";
+import { TodayBalance } from "./today-balance";
 
 export const metadata: Metadata = {
   title: "Übersicht – AmpereSolar Cockpit",
@@ -30,7 +31,13 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   await verifySession();
-  const latest = await getLatestReading();
+  // Promise.all: Beide Abfragen starten gleichzeitig. Mit zwei einzelnen
+  // `await` nacheinander würde die zweite erst nach der ersten beginnen
+  // ("Wasserfall") – die Wartezeiten addierten sich.
+  const [latest, today] = await Promise.all([
+    getLatestReading(),
+    getTodayTotals(),
+  ]);
 
   // Leerer Zustand: Die Tabelle hat (noch) keine Zeilen.
   if (!latest) {
@@ -54,6 +61,7 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
       <LiveDashboard initialReading={latest.reading} fetchedAt={latest.fetchedAt} />
+      <TodayBalance totals={today} />
     </main>
   );
 }

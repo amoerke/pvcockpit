@@ -358,3 +358,47 @@ wofür sie da sind.
 
 Im Browser: Indikator zeigt „Live“, Kacheln und Energiefluss aktualisieren
 sich ohne Neuladen mit jedem neuen Messwert.
+
+## Schritt 15 – Heute-Bilanz
+
+> Dateien: `lib/time.ts`, `lib/readings/today.ts`, `lib/data/readings.ts` (`getTodayTotals`),
+> `app/dashboard/today-balance.tsx`
+
+### Zähler statt Summen
+
+Die Spalten `*_today_kwh` zählt der Wechselrichter selbst hoch und setzt sie um
+Mitternacht zurück. Statt 1.440 Minutenwerte (Leistung × Zeit) aufzusummieren,
+reicht der **neueste Stand von heute**: Da die Zähler nur steigen, ist er
+zugleich das Tagesmaximum. Die Abfrage ist dieselbe wie bei `getLatestReading()`,
+nur mit einer Untergrenze:
+
+```ts
+.gte("ts", startOfDayBerlin(Date.now()))
+.order("ts", { ascending: false }).limit(1).maybeSingle()
+```
+
+### „Heute“ ist eine Zeitzonenfrage
+
+`ts` liegt in UTC. „Heute“ beginnt um 00:00 Uhr **Berliner** Zeit – im Sommer
+22:00 UTC am Vortag, im Winter 23:00 UTC. Ohne die Grenze würde kurz nach
+Mitternacht der Endstand von gestern als „heute“ angezeigt.
+
+`startOfDayBerlin(now)` bekommt „jetzt“ als Parameter (wie `minutesSince`):
+rein, testbar, und `Date.now()` steht im Aufrufer (der Datenfunktion), nicht
+in einer Komponente.
+
+### Parallel laden mit `Promise.all`
+
+```ts
+const [latest, today] = await Promise.all([getLatestReading(), getTodayTotals()]);
+```
+
+Zwei `await` nacheinander wären ein **Wasserfall**: Die zweite Abfrage startet
+erst, wenn die erste fertig ist. `Promise.all` startet beide sofort, die Seite
+wartet nur so lange wie die langsamere. Doppelte `verifySession()`-Aufrufe
+kosten dank `cache()` nichts.
+
+### `<dl>` für Kennzahlen
+
+Begriff (`<dt>`) und Wert (`<dd>`) gehören zusammen – eine Definitionsliste
+drückt das semantisch aus, Screenreader lesen die Paare gemeinsam vor.

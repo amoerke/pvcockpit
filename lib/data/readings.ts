@@ -19,7 +19,13 @@ import {
   toLiveReading,
   type LiveReading,
 } from "@/lib/readings/live";
+import {
+  TODAY_COLUMNS,
+  toTodayTotals,
+  type TodayTotals,
+} from "@/lib/readings/today";
 import { createClient } from "@/lib/supabase/server";
+import { startOfDayBerlin } from "@/lib/time";
 
 export type LatestReading = {
   reading: LiveReading;
@@ -62,4 +68,32 @@ export async function getLatestReading(): Promise<LatestReading | null> {
     reading: toLiveReading(data),
     fetchedAt: Date.now(),
   };
+}
+
+/**
+ * Tagesbilanz von heute (Berliner Zeit) – oder `null`, falls es heute noch
+ * keine Zeile gibt (z. B. kurz nach Mitternacht).
+ */
+export async function getTodayTotals(): Promise<TodayTotals | null> {
+  await verifySession();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("solar_readings")
+    .select(TODAY_COLUMNS)
+    // Nur Zeilen ab 00:00 Uhr Berliner Zeit. Ohne diese Grenze käme kurz nach
+    // Mitternacht noch der Endstand von GESTERN als "heute" an.
+    .gte("ts", startOfDayBerlin(Date.now()))
+    // Die Zähler steigen über den Tag nur an → die neueste Zeile von heute
+    // enthält den höchsten Stand. Gleicher Index-Trick wie oben.
+    .order("ts", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[getTodayTotals]", error.code, error.message);
+    throw new Error("Tagesbilanz konnte nicht geladen werden.");
+  }
+
+  return data ? toTodayTotals(data) : null;
 }

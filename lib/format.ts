@@ -25,6 +25,12 @@ export function formatPower(watts: number | null): string {
   return `${oneDecimalFormat.format(watts / 1000)} kW`;
 }
 
+/** 12.34 → "12,3 kWh" */
+export function formatEnergy(kwh: number | null): string {
+  if (kwh === null) return NO_VALUE;
+  return `${oneDecimalFormat.format(kwh)} kWh`;
+}
+
 /** 20.9 → "21 %" */
 export function formatPercent(value: number | null): string {
   if (value === null) return NO_VALUE;
