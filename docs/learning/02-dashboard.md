@@ -38,8 +38,9 @@ auf (Abgleich am 06.10.2026: PV 1878 W = Batterie 1316 W + Haus 537 W + Netz 24 
   systematisch zu hoch (abends beim Entladen oft 300 W und mehr). In den Daten
   gilt exakt `load_power = |CT-Netz + total_grid_power|`.
 - `direction_*`, `inverter_power`: ungenutzt (Vorzeichen reichen).
-- Tagesenergien aus den Wechselrichter-Zählern `*_today_kwh` (Tagesmaximum),
-  Tagesgrenzen in `Europe/Berlin`.
+- Tagesenergien aus den `sys_*`-Minutenwerten aufsummiert (Leistung × Zeit),
+  Tagesgrenzen in `Europe/Berlin`. Die SAJ-Zähler `*_today_kwh` passen nicht
+  zur App (Abgleich 08.10.2026, siehe Schritt 15).
 
 ### Offene Punkte außerhalb dieses Projekts
 
@@ -364,18 +365,25 @@ sich ohne Neuladen mit jedem neuen Messwert.
 > Dateien: `lib/time.ts`, `lib/readings/today.ts`, `lib/data/readings.ts` (`getTodayTotals`),
 > `app/dashboard/today-balance.tsx`
 
-### Zähler statt Summen
+### Summen statt Zähler
 
-Die Spalten `*_today_kwh` zählt der Wechselrichter selbst hoch und setzt sie um
-Mitternacht zurück. Statt 1.440 Minutenwerte (Leistung × Zeit) aufzusummieren,
-reicht der **neueste Stand von heute**: Da die Zähler nur steigen, ist er
-zugleich das Tagesmaximum. Die Abfrage ist dieselbe wie bei `getLatestReading()`,
-nur mit einer Untergrenze:
+Ursprünglich kamen die Werte aus den Tageszählern `*_today_kwh` des
+Wechselrichters (neuester Stand von heute = Tagesmaximum). Der Abgleich mit der
+Ampere-App am 08.10.2026 zeigte aber: PV zählt dort ohne SolarMax (4,3 statt
+5,5 kWh), Netzbezug, Einspeisung und Hausverbrauch weichen stark ab, und die
+Bilanz (rein = raus) verfehlt das Ziel um über 8 kWh.
 
-```ts
-.gte("ts", startOfDayBerlin(Date.now()))
-.order("ts", { ascending: false }).limit(1).maybeSingle()
+Deshalb summiert `toTodayTotals()` jetzt die `sys_*`-Leistungen selbst:
+
 ```
+Energie [Wh] = Σ Leistung [W] × Dauer bis zur nächsten Messung [h]
+```
+
+- Vorzeichen werden in zwei Richtungen zerlegt (Netz: Bezug/Einspeisung,
+  Batterie: entladen/laden) – wie beim Live-Wert.
+- Lücken über 5 Minuten (Logger-Ausfall) zählen nicht mit.
+- PostgREST liefert höchstens 1.000 Zeilen pro Anfrage, ein Tag hat bis zu
+  1.440 – deshalb lädt `getTodayTotals()` seitenweise mit `.range()`.
 
 ### „Heute“ ist eine Zeitzonenfrage
 

@@ -3,7 +3,7 @@
  *
  * Neutrale Komponente (nur Props). Sie wird vorerst nur auf dem Server
  * gerendert und aktualisiert sich NICHT live – beim Neuladen der Seite
- * kommt der aktuelle Zählerstand.
+ * wird neu aufsummiert.
  */
 import {
   ArrowDownToLine,
@@ -32,8 +32,8 @@ export function TodayBalance({ totals }: { totals: TodayTotals | null }) {
         <CardTitle>Heute</CardTitle>
         <CardDescription>
           {totals
-            ? `Zählerstände des Wechselrichters, Stand ${formatTime(totals.timestamp)} Uhr`
-            : "Für heute liegen noch keine Zählerstände vor."}
+            ? `Aus den Minutenwerten berechnet, Stand ${formatTime(totals.timestamp)} Uhr`
+            : "Für heute liegen noch keine Messwerte vor."}
         </CardDescription>
       </CardHeader>
 
