@@ -138,7 +138,23 @@ export type Database = {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      // Migration 0003. Args: date kommt/geht als "YYYY-MM-DD"-String.
+      // Returns als Array: Die Funktion liefert eine Tabelle (eine Zeile je Tag).
+      daily_energy: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          pv_kwh: number;
+          house_kwh: number;
+          battery_charge_kwh: number;
+          battery_discharge_kwh: number;
+          grid_import_kwh: number;
+          grid_export_kwh: number;
+          measured_hours: number;
+        }[];
+      };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

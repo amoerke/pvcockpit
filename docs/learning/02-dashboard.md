@@ -572,3 +572,71 @@ eines Buttons:
 Ladezustand der Batterie als zweites, kleines Diagramm unter der
 Leistungskurve: `soc` in `TODAY_COLUMNS` und `TodayRow` aufnehmen, in
 `toDayCurve()` mitteln, dann eine `AreaChart` mit y-Achse 0–100 %.
+
+## Schritt 18 – Tagesenergien in der Datenbank: `daily_energy()`
+
+> Datei: `supabase/migrations/0003_daily_energy.sql`
+> Doku: https://supabase.com/docs/guides/database/functions,
+> https://www.postgresql.org/docs/current/functions-window.html
+
+### Warum nicht wieder in der App summieren?
+
+| Zeitraum | Minutenwerte | Anfragen à 1.000 Zeilen |
+|---|---|---|
+| Tag | 1.440 | 2 |
+| 30 Tage | 43.200 | 44 |
+| Jahr | 525.600 | 526 |
+
+Für ein Jahr müssten über eine halbe Million Zeilen durchs Netz, nur damit
+die App am Ende 365 Zahlen daraus macht. Die Funktion rechnet deshalb dort, wo
+die Daten liegen, und schickt eine Zeile pro Tag.
+
+### Dieselbe Rechnung in SQL
+
+| App (`toTodayTotals`) | SQL (`daily_energy`) |
+|---|---|
+| Schleife, `rows[i + 1].ts` | Fensterfunktion `lead(ts) over (order by ts)` |
+| `if (dt > 5 min) continue` | `where next_ts - ts <= interval '5 minutes'` |
+| `Math.max(x, 0)` | `greatest(x, 0)` |
+| `startOfDay…`, `dayRangeBerlin()` | `ts at time zone 'Europe/Berlin'` |
+| eine Summe für den ganzen Tag | `group by day`: eine Zeile je Tag |
+
+Einen kleinen Unterschied gibt es: Die SQL-Funktion kennt auch die erste
+Messung des Folgetags. Sie zählt deshalb das letzte Intervall vor Mitternacht
+(23:59 → 00:00) mit, die App nicht. Das macht höchstens eine Minute pro Tag aus.
+
+### Die Optionen der Funktion
+
+| Option | Bedeutung |
+|---|---|
+| `language sql` | reines SQL, kein PL/pgSQL nötig |
+| `stable` | liest nur. Postgres darf optimieren (Standard wäre `volatile`) |
+| `security invoker` | läuft mit den Rechten des **Aufrufers**, RLS gilt |
+| `set search_path = ''` | alle Namen mit Schema → nichts „unterschiebbar“ |
+
+`security definer` liefe dagegen als Besitzer (`postgres`) und würde RLS
+umgehen. Das ist nützlich für gezielte Ausnahmen, aber gefährlich, wenn man es
+nicht bewusst einsetzt. Hier ist es nicht nötig: Eingeloggte dürfen die
+Tabelle ohnehin lesen.
+
+### Rechte auf Funktionen
+
+Postgres gibt `EXECUTE` auf neue Funktionen standardmäßig an **jeden**
+(`PUBLIC`). Wie bei der Tabelle in Migration 0001 ziehen wir das ein, und nur
+`authenticated` darf die Funktion aufrufen. Wegen `security invoker` würde
+`anon` sowieso an der Tabelle scheitern. Das ist die zweite Schicht.
+
+### Aufruf aus der App
+
+PostgREST stellt Funktionen unter `/rest/v1/rpc/<name>` bereit:
+
+```ts
+const { data } = await supabase.rpc("daily_energy", { p_from: "2026-10-01", p_to: "2026-10-14" });
+```
+
+Der Typ steht unter `Functions` in `database.types.ts`. Damit sind Parameter
+und Rückgabe typisiert, und ein Tippfehler im Parameternamen fällt beim
+Kompilieren auf.
+
+`notify pgrst, 'reload schema'` am Ende der Migration sorgt dafür, dass
+PostgREST die neue Funktion sofort kennt.
