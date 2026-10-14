@@ -640,3 +640,27 @@ Kompilieren auf.
 
 `notify pgrst, 'reload schema'` am Ende der Migration sorgt dafür, dass
 PostgREST die neue Funktion sofort kennt.
+
+### Geprüft (14.10.2026, im SQL-Editor)
+
+1. **Als `authenticated`:** eine Zeile je Tag. Der 13.10. ergibt 16,4 / 22,8 /
+   7,0 kWh (PV / Haus / Bezug), dieselben Werte wie der Verlauf der App.
+2. **Als `anon`:** `ERROR 42501: permission denied for function daily_energy`.
+3. **Laufzeit für 365 Tage:** `Execution Time: 675.501 ms`
+
+`measured_hours` macht Ausfälle sichtbar:
+
+- 12.10.: 23,62 h, also fehlen rund 23 Minuten (Lücke > 5 min, zählt nicht).
+- 14.10.: 19,23 h, weil der Tag beim Prüfen gegen 19:14 Uhr noch lief.
+- Werte knapp über 24 h sind richtig: Ein Intervall zählt zu dem Tag, an dem es
+  beginnt. Das letzte reicht deshalb bis zur ersten Messung nach Mitternacht.
+
+### Bewertung der Laufzeit
+
+Rund 0,7 s reichen für die Jahresansicht. Die Zeit wächst aber mit der
+Zahl der Zeilen im Zeitraum. Wird sie zu langsam, gibt es zwei nächste Stufen:
+
+- eine Tabelle mit **fertigen Tagessummen**, die nachts per `pg_cron`
+  nachgerechnet wird. Ein Jahr sind dann nur noch 365 Zeilen.
+- ein **Covering Index** auf `(ts) include (sys_*)`, damit Postgres die
+  Zeilen nicht aus der Tabelle holen muss (Index-Only Scan).
