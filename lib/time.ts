@@ -7,44 +7,78 @@
 
 export const TIME_ZONE = "Europe/Berlin";
 
+// ---------------------------------------------------------------------------
+// Kalendertage als Text "YYYY-MM-DD" (für die URL: ?date=2026-10-14)
+// ---------------------------------------------------------------------------
+
+/** Kalendertag in Berlin, z. B. "2026-10-14". */
+export type DayString = string;
+
+const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 /**
- * Beginn des Kalendertags (00:00 Uhr Berliner Zeit), in dem `now` liegt –
- * als ISO-String in UTC, direkt nutzbar für `.gte("ts", …)`.
- *
- * Beispiele:
- *   Sommerzeit: now = 2026-10-08T14:00:00Z → "2026-10-07T22:00:00.000Z"
- *   Winterzeit: now = 2026-12-01T09:30:00Z → "2026-11-30T23:00:00.000Z"
- *   Kurz nach Mitternacht: now = 2026-10-07T22:30:00Z (= 00:30 Uhr am 08.10.)
- *                                           → "2026-10-07T22:00:00.000Z"
- *
- * @param now Zeitpunkt in ms seit 1970 (z. B. Date.now())
+ * Berliner Kalendertag, in dem `now` liegt.
+ * Locale "sv-SE" formatiert Daten als "2026-10-14" – genau unser Format.
  */
-export function startOfDayBerlin(now: number): string {
-  // Ein Formatter liefert beides: Kalendertag in Berlin UND den Abstand zu UTC
-  // ("GMT+02:00") – beides für denselben Zeitpunkt `now`.
-  const parts = new Intl.DateTimeFormat("de-DE", {
-    timeZone: TIME_ZONE,
-    timeZoneName: "longOffset",
-  }).formatToParts(new Date(now));
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((p) => p.type === type)?.value ?? "";
+export function berlinDay(now: number): DayString {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: TIME_ZONE }).format(new Date(now));
+}
 
-  // 1. Mitternacht des Berliner Kalendertags – zunächst als wäre es UTC.
-  const midnightAsUtc = Date.UTC(
-    Number(part("year")),
-    Number(part("month")) - 1, // Date.UTC zählt Monate ab 0
-    Number(part("day")),
-  );
+/**
+ * Prüft einen Wert aus der URL. Ungültig, fehlend oder in der Zukunft → `today`.
+ * Werte aus der URL sind Benutzereingaben: Jeder kann ?date=quatsch eintippen.
+ */
+export function parseDay(value: string | string[] | undefined, today: DayString): DayString {
+  if (typeof value !== "string") return today;
+  const match = DAY_PATTERN.exec(value);
+  if (!match) return today;
 
-  // 2. Abstand Berlin ↔ UTC: "GMT+02:00" → 120 Minuten, "GMT+01:00" → 60.
-  //    Stunden UND Minuten getrennt lesen – "+0200" als Zahl wäre 200.
-  //    (Am Tag der Zeitumstellung gilt der Abstand von `now`, nicht der von
-  //    Mitternacht → Grenze 1 h daneben. Für "neueste Zeile von heute" egal.)
-  const match = /([+-])(\d{2}):(\d{2})/.exec(part("timeZoneName"));
-  const offsetMinutes = match
-    ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
-    : 0; // "GMT" ohne Zusatz = Abstand 0
+  // Gibt es den Tag wirklich? new Date(Date.UTC(2026, 1, 30)) wäre still der 2. März.
+  const [, y, m, d] = match.map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return today;
 
-  // 3. Berliner Mitternacht liegt um den Abstand FRÜHER als UTC-Mitternacht.
-  return new Date(midnightAsUtc - offsetMinutes * 60_000).toISOString();
+  // Textvergleich funktioniert, weil das Format von links nach rechts sortiert.
+  return value > today ? today : value;
+}
+
+/** "2026-10-14" + 1 → "2026-10-15" (Monats- und Jahreswechsel inklusive). */
+export function addDays(day: DayString, days: number): DayString {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * Beginn und Ende eines Berliner Kalendertags als UTC-ISO-Strings,
+ * für `.gte("ts", start).lt("ts", end)`.
+ *
+ * Stimmt auch an den Tagen der Zeitumstellung: Der 25.10.2026 hat
+ * 25 Stunden, der 29.03.2026 nur 23.
+ */
+export function dayRangeBerlin(day: DayString): { start: string; end: string } {
+  return {
+    start: new Date(berlinMidnight(day)).toISOString(),
+    end: new Date(berlinMidnight(addDays(day, 1))).toISOString(),
+  };
+}
+
+/** Mitternacht eines Berliner Tags in ms seit 1970. */
+function berlinMidnight(day: DayString): number {
+  const [y, m, d] = day.split("-").map(Number);
+  const midnightAsUtc = Date.UTC(y, m - 1, d);
+  // Zweimal schätzen: Der Abstand zu UTC hängt vom Zeitpunkt selbst ab.
+  // 1. Schätzung mit dem Abstand um 00:00 UTC, 2. mit dem Abstand am Ergebnis.
+  const guess = midnightAsUtc - offsetMs(midnightAsUtc);
+  return midnightAsUtc - offsetMs(guess);
+}
+
+/** Abstand Berlin ↔ UTC zum Zeitpunkt `at`, in ms (Sommer +2 h, Winter +1 h). */
+function offsetMs(at: number): number {
+  const name =
+    new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, timeZoneName: "longOffset" })
+      .formatToParts(new Date(at))
+      .find((p) => p.type === "timeZoneName")?.value ?? "";
+  const match = /([+-])(\d{2}):(\d{2})/.exec(name);
+  if (!match) return 0;
+  return (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) * 60_000;
 }

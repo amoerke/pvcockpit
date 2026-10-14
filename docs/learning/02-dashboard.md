@@ -460,3 +460,115 @@ dem Server.
 
 - `tsc` und ESLint ohne Befund, E2E 12/12 grün
 - Im Browser mit echten Daten: Werte passen zur Tagesbilanz, keine Konsolenfehler
+
+## Schritt 17 – Verlauf: Tagesansicht
+
+> Dateien: `app/dashboard/history/{page,day-nav,day-chart}.tsx`, `lib/readings/day.ts`,
+> `lib/time.ts`, `lib/data/readings.ts` (`getDayHistory`), `components/ui/chart.tsx`
+> Doku: `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/page.md`,
+> https://ui.shadcn.com/docs/components/chart
+
+Der Verlauf ist auf zwei Schritte verteilt: **17** zeigt einen einzelnen Tag
+mit Leistungskurve und Navigation von Tag zu Tag. **18** bringt die Zeiträume
+7 T / 30 T / Jahr. Dafür müssen die Summen in der Datenbank entstehen, denn ein
+Jahr hat rund 525.000 Zeilen.
+
+### Zustand in der URL statt `useState`
+
+```
+/dashboard/history                   → heute
+/dashboard/history?date=2026-10-13   → 13.10.2026
+```
+
+```tsx
+export default async function HistoryPage(props: PageProps<"/dashboard/history">) {
+  const { date } = await props.searchParams;   // in Next 16 ein Promise!
+  const history = await getDayHistory(date);
+```
+
+- Die Pfeile sind einfache `<Link href="?date=…">`. Ein Klick löst eine
+  Navigation aus, und die Server Component rendert mit dem neuen Wert. Es gibt
+  keinen Client-State und keinen `useEffect`.
+- Lesezeichen, Teilen und der Zurück-Knopf funktionieren deshalb ohne
+  zusätzlichen Code.
+- `PageProps<"/dashboard/history">` ist ein globaler Typ-Helfer, den `next dev`
+  erzeugt.
+- Wer `searchParams` liest, macht die Seite **dynamisch**: Sie wird bei jedem
+  Aufruf neu gerendert. Das ist hier gewollt.
+
+### URL-Werte sind Benutzereingaben
+
+Jeder kann `?date=quatsch`, `?date=2026-02-30` oder `?date=a&date=b` eintippen
+(dann kommt ein Array an). `parseDay()` prüft das Format, ob es den Tag
+wirklich gibt, und ob er in der Zukunft liegt. In allen Fehlerfällen zeigt die
+Seite den heutigen Tag.
+
+Die Prüfung steckt in `getDayHistory()` und nicht in der Seite. Dafür wird
+nämlich `Date.now()` gebraucht, und ESLint (`react-hooks/purity`) meldet das im
+Render als Fehler, auch in einer async Server Component. Das ist derselbe
+Stolperstein wie in Schritt 13.
+
+### Ein Tag hat nicht immer 24 Stunden
+
+`dayRangeBerlin("2026-10-25")` liefert 22:00 → 23:00 UTC, also **25 Stunden**,
+weil an diesem Tag die Sommerzeit endet. Am 29.03.2026 sind es nur 23 Stunden.
+`berlinMidnight()` schätzt deshalb zweimal: Der Abstand zu UTC hängt vom
+Zeitpunkt selbst ab. Das alte `startOfDayBerlin()` kannte diesen Sonderfall
+nicht. `dayRangeBerlin()` ersetzt es jetzt, auch für „Heute“ in der Übersicht.
+
+Auch beim Rechnen mit Kalendertagen hilft UTC: `addDays()` rechnet mit
+`Date.UTC(y, m, d + 1)`. JavaScript kümmert sich dann um Monats- und
+Jahreswechsel, und es kann keine Zeitzone dazwischenfunken.
+
+### Eine Abfrage, zwei Auswertungen
+
+`getDayHistory()` lädt die Minutenwerte des Tages **einmal** und rechnet daraus:
+
+- `toDayCurve()` → 288 Punkte (5-Minuten-Mittel) für das Diagramm
+- `toTodayTotals()` → Tagesbilanz, daraus `toRatios()` → Autarkie/Eigenverbrauch
+
+Das Verdichten spart Daten. Alles, was eine Server Component an eine Client
+Component gibt, wird ins HTML serialisiert. 1.440 Punkte mit 4 Werten wären
+mehr, als das Diagramm in Pixeln breit ist. Abschnitte ohne Messung bleiben
+`null` und erscheinen als Lücke, statt einen Logger-Ausfall zu überbrücken.
+
+`TodayBalance` und `SelfSufficiency` haben jetzt eine optionale `title`-Prop.
+Damit lassen sie sich unverändert für jeden Tag verwenden.
+
+### Recharts über shadcn Charts
+
+`npx shadcn add chart` installiert `recharts` und `components/ui/chart.tsx`.
+Das Diagramm ist eine Client Component, weil Recharts die Breite misst und auf
+die Maus reagiert. Es bekommt fertige Zahlen und zeichnet nur.
+
+- `ChartConfig` legt Bezeichnung und Farbe je Linie fest (für Hell und Dunkel
+  getrennt). `ChartContainer` erzeugt daraus `--color-pv` usw.
+- Die x-Achse hat `type="number"` mit `domain=[Tagesbeginn, Tagesende]`: Der
+  Abstand der Punkte entspricht der Zeit, und der ganze Tag ist immer zu sehen,
+  auch heute um 10 Uhr.
+- Vorzeichen bleiben erhalten: Batterie und Netz schwingen um die Nulllinie.
+- `itemSorter={null}` an der Legende: Recharts sortiert sonst alphabetisch
+  nach `dataKey`.
+
+### Stolperstein: Link mit Button-Optik
+
+`<Button render={<Link />} nativeButton={false}>` rendert zwar ein `<a>`,
+Base UI setzt aber `role="button"`. Screenreader sagen dann „Schaltfläche“ an,
+obwohl der Klick zu einer anderen Seite führt (aufgefallen, weil Playwright
+`getByRole("link")` nicht fand). Richtig ist ein echter Link mit der Optik
+eines Buttons:
+
+```tsx
+<Link href="…" className={buttonVariants({ variant: "outline", size: "icon" })}>
+```
+
+### Getestet
+
+- `tsc`, ESLint ohne Befund; E2E 14/14 grün (neu: Tag wechseln, ungültiges Datum)
+- Im Browser: echte Kurve vom 13.10., Tooltip, Hell und Dunkel, keine Konsolenfehler
+
+### Übung (optional)
+
+Ladezustand der Batterie als zweites, kleines Diagramm unter der
+Leistungskurve: `soc` in `TODAY_COLUMNS` und `TodayRow` aufnehmen, in
+`toDayCurve()` mitteln, dann eine `AreaChart` mit y-Achse 0–100 %.

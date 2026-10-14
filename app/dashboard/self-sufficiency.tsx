@@ -19,13 +19,19 @@ import { formatEnergy, formatPercent } from "@/lib/format";
 import { toRatios } from "@/lib/readings/ratios";
 import type { TodayTotals } from "@/lib/readings/today";
 
-export function SelfSufficiency({ totals }: { totals: TodayTotals | null }) {
+export function SelfSufficiency({
+  totals,
+  title = "Unabhängigkeit heute",
+}: {
+  totals: TodayTotals | null;
+  title?: string;
+}) {
   const ratios = toRatios(totals);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Unabhängigkeit heute</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>Berechnet aus der Tagesbilanz</CardDescription>
       </CardHeader>
 

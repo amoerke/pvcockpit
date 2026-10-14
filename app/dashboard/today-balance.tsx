@@ -25,15 +25,22 @@ import {
 import { formatEnergy, formatTime } from "@/lib/format";
 import type { TodayTotals } from "@/lib/readings/today";
 
-export function TodayBalance({ totals }: { totals: TodayTotals | null }) {
+export function TodayBalance({
+  totals,
+  title = "Heute",
+}: {
+  totals: TodayTotals | null;
+  /** Überschrift – im Verlauf steht hier "Tagesbilanz" statt "Heute". */
+  title?: string;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Heute</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>
           {totals
             ? `Aus den Minutenwerten berechnet, Stand ${formatTime(totals.timestamp)} Uhr`
-            : "Für heute liegen noch keine Messwerte vor."}
+            : "Für diesen Tag liegen keine Messwerte vor."}
         </CardDescription>
       </CardHeader>
 

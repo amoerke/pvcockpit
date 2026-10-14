@@ -42,6 +42,36 @@ test.describe("Mit Login", () => {
     await expect(page).toHaveURL("/dashboard");
   });
 
+  test("Verlauf: Tag steht in der URL und lässt sich wechseln", async ({ page }) => {
+    // Fester Tag in der Vergangenheit – der Test hängt nicht vom heutigen Datum ab.
+    await page.goto("/dashboard/history?date=2026-10-10");
+    const nav = page.getByRole("navigation", { name: "Tag wählen" });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Samstag, 10. Oktober 2026",
+    );
+
+    await nav.getByRole("link", { name: "Vorheriger Tag" }).click();
+    await expect(page).toHaveURL("/dashboard/history?date=2026-10-09");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Freitag, 9. Oktober 2026",
+    );
+
+    // "Heute": ohne ?date=, und in die Zukunft geht es nicht weiter.
+    await nav.getByRole("link", { name: "Heute" }).click();
+    await expect(page).toHaveURL("/dashboard/history");
+    await expect(nav.getByRole("button", { name: "Nächster Tag" })).toBeDisabled();
+  });
+
+  test("Verlauf: ungültiges Datum zeigt heute", async ({ page }) => {
+    await page.goto("/dashboard/history?date=2026-02-30");
+    // Ohne Pfeil "Nächster Tag" als Link → es ist der heutige Tag.
+    await expect(
+      page.getByRole("navigation", { name: "Tag wählen" }).getByRole("button", {
+        name: "Nächster Tag",
+      }),
+    ).toBeDisabled();
+  });
+
   test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
     await page.goto("/dashboard");
 

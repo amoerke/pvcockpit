@@ -14,6 +14,7 @@
 import "server-only";
 
 import { verifySession } from "@/lib/dal";
+import { toDayCurve, type CurvePoint } from "@/lib/readings/day";
 import {
   LIVE_COLUMNS,
   toLiveReading,
@@ -26,7 +27,7 @@ import {
   type TodayTotals,
 } from "@/lib/readings/today";
 import { createClient } from "@/lib/supabase/server";
-import { startOfDayBerlin } from "@/lib/time";
+import { berlinDay, dayRangeBerlin, parseDay, type DayString } from "@/lib/time";
 
 export type LatestReading = {
   reading: LiveReading;
@@ -79,6 +80,37 @@ export async function getLatestReading(): Promise<LatestReading | null> {
 const PAGE_SIZE = 1000;
 
 /**
+ * Alle Minutenwerte im Zeitraum [start, end), nach Zeit aufsteigend.
+ * Nicht exportiert: Aufrufer gehen über die Funktionen unten, die zuerst
+ * verifySession() aufrufen.
+ */
+async function fetchDayRows(start: string, end: string): Promise<TodayRow[]> {
+  const supabase = await createClient();
+  const rows: TodayRow[] = [];
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("solar_readings")
+      .select(TODAY_COLUMNS)
+      .gte("ts", start)
+      .lt("ts", end)
+      // Aufsteigend: Summe und Kurve brauchen die Reihenfolge der Messungen.
+      .order("ts", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("[fetchDayRows]", error.code, error.message);
+      throw new Error("Messwerte konnten nicht geladen werden.");
+    }
+
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+/**
  * Tagesbilanz von heute (Berliner Zeit), aus den Minutenwerten aufsummiert –
  * oder `null`, falls es heute noch keine Zeile gibt (z. B. kurz nach
  * Mitternacht).
@@ -86,28 +118,49 @@ const PAGE_SIZE = 1000;
 export async function getTodayTotals(): Promise<TodayTotals | null> {
   await verifySession();
 
-  const supabase = await createClient();
-  // Nur Zeilen ab 00:00 Uhr Berliner Zeit.
-  const since = startOfDayBerlin(Date.now());
-  const rows: TodayRow[] = [];
+  const { start, end } = dayRangeBerlin(berlinDay(Date.now()));
+  return toTodayTotals(await fetchDayRows(start, end));
+}
 
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("solar_readings")
-      .select(TODAY_COLUMNS)
-      .gte("ts", since)
-      // Aufsteigend: Die Summe braucht die Reihenfolge der Messungen.
-      .order("ts", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
+export type DayHistory = {
+  /** Der angezeigte Tag (geprüft). */
+  day: DayString;
+  /** Heutiger Tag in Berlin – für "Nächster Tag" und den Heute-Link. */
+  today: DayString;
+  /** Tagesgrenzen in ms – die x-Achse zeigt immer den ganzen Tag. */
+  startMs: number;
+  endMs: number;
+  curve: CurvePoint[];
+  totals: TodayTotals | null;
+};
 
-    if (error) {
-      console.error("[getTodayTotals]", error.code, error.message);
-      throw new Error("Tagesbilanz konnte nicht geladen werden.");
-    }
+/**
+ * Verlauf eines Kalendertags: Leistungskurve (5-Minuten-Mittel) und
+ * Tagesbilanz. Beides aus DENSELBEN Zeilen – eine Abfrage, zwei Auswertungen.
+ *
+ * @param requested roher Wert aus der URL (?date=…). Wird hier geprüft:
+ *   ungültig, fehlend oder in der Zukunft → heute. Date.now() steht deshalb
+ *   hier und nicht in der Seite (Komponenten müssen rein sein, vgl. Schritt 13).
+ */
+export async function getDayHistory(
+  requested: string | string[] | undefined,
+): Promise<DayHistory> {
+  await verifySession();
 
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) break;
-  }
+  const today = berlinDay(Date.now());
+  const day = parseDay(requested, today);
 
-  return toTodayTotals(rows);
+  const { start, end } = dayRangeBerlin(day);
+  const rows = await fetchDayRows(start, end);
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
+
+  return {
+    day,
+    today,
+    startMs,
+    endMs,
+    curve: toDayCurve(rows, startMs, endMs),
+    totals: toTodayTotals(rows),
+  };
 }

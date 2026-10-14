@@ -50,6 +50,27 @@ const timeFormat = new Intl.DateTimeFormat("de-DE", {
   timeZone: "Europe/Berlin",
 });
 
-export function formatTime(isoTimestamp: string): string {
-  return timeFormat.format(new Date(isoTimestamp));
+/** Nimmt ISO-Strings ("2026-10-14T16:26:00Z") und ms-Zahlen (x-Achse im Diagramm). */
+export function formatTime(timestamp: string | number): string {
+  return timeFormat.format(new Date(timestamp));
+}
+
+/**
+ * "2026-10-14" → "Mittwoch, 14. Oktober 2026".
+ *
+ * Hier ausnahmsweise timeZone "UTC": Der Text ist schon ein Berliner
+ * Kalendertag. Date.UTC(…) + Formatieren in UTC gibt genau diesen Tag
+ * zurück – mit Berliner Zeitzone könnte er sich verschieben.
+ */
+const dayFormat = new Intl.DateTimeFormat("de-DE", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+export function formatDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return dayFormat.format(new Date(Date.UTC(y, m - 1, d)));
 }
