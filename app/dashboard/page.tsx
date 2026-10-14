@@ -23,6 +23,7 @@ import { verifySession } from "@/lib/dal";
 import { getLatestReading, getTodayTotals } from "@/lib/data/readings";
 
 import { LiveDashboard } from "./live-dashboard";
+import { SelfSufficiency } from "./self-sufficiency";
 import { TodayBalance } from "./today-balance";
 
 export const metadata: Metadata = {
@@ -62,6 +63,7 @@ export default async function DashboardPage() {
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
       <LiveDashboard initialReading={latest.reading} fetchedAt={latest.fetchedAt} />
       <TodayBalance totals={today} />
+      <SelfSufficiency totals={today} />
     </main>
   );
 }

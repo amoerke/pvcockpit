@@ -9,6 +9,7 @@
 import { BatteryMedium, House, Sun, UtilityPole } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Meter } from "@/components/meter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent, formatPower } from "@/lib/format";
 import type { LiveReading } from "@/lib/readings/live";
@@ -25,7 +26,7 @@ export function LiveTiles({ reading }: { reading: LiveReading }) {
         value={formatPercent(reading.socPercent)}
         detail={batteryDetail(reading)}
       >
-        <SocBar percent={reading.socPercent} />
+        <Meter label="Ladezustand" percent={reading.socPercent} />
       </Tile>
 
       <Tile
@@ -69,25 +70,6 @@ function Tile({
         {children}
       </CardContent>
     </Card>
-  );
-}
-
-/** Ladezustand als Balken. role="meter" + aria-Werte für Screenreader. */
-function SocBar({ percent }: { percent: number | null }) {
-  if (percent === null) return null;
-  const clamped = Math.min(Math.max(percent, 0), 100);
-
-  return (
-    <div
-      role="meter"
-      aria-label="Ladezustand"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={clamped}
-      className="h-2 overflow-hidden rounded-full bg-muted"
-    >
-      <div className="h-full rounded-full bg-primary" style={{ width: `${clamped}%` }} />
-    </div>
   );
 }
 

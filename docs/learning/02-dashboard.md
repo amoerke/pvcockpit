@@ -410,3 +410,53 @@ kosten dank `cache()` nichts.
 
 Begriff (`<dt>`) und Wert (`<dd>`) gehören zusammen – eine Definitionsliste
 drückt das semantisch aus, Screenreader lesen die Paare gemeinsam vor.
+
+## Schritt 16 – Autarkie und Eigenverbrauch
+
+> Dateien: `lib/readings/ratios.ts`, `app/dashboard/self-sufficiency.tsx`, `components/meter.tsx`
+
+### Zwei Kennzahlen, zwei Blickrichtungen
+
+| Kennzahl | Frage | Formel |
+|---|---|---|
+| **Autarkiegrad** | Wie viel meines *Verbrauchs* kam nicht aus dem Netz? | (Verbrauch − Netzbezug) / Verbrauch |
+| **Eigenverbrauchsquote** | Wie viel meines *PV-Stroms* blieb im Haus? | (PV − Einspeisung) / PV |
+
+Beispiel 14.10.2026, 18:26 Uhr: 17,4 kWh Verbrauch, 6,8 kWh Netzbezug →
+**61 % autark**. 13,4 kWh PV, 0,1 kWh Einspeisung → **99 % Eigenverbrauch**.
+Im Herbst ist die Eigenverbrauchsquote hoch und der Autarkiegrad niedrig. Im
+Sommer ist es meist umgekehrt.
+
+Die Batterie steht in keiner Formel: Strom, der mittags gespeichert und abends
+entladen wird, ist weder Netzbezug noch Einspeisung. Er zählt deshalb bei
+beiden Kennzahlen automatisch als „selbst genutzt“.
+
+> Die Anzeige „10,5 von 17,4 kWh“ wirkt, als wäre falsch gerechnet
+> (17,4 − 6,8 = 10,6). Gerechnet wird aber mit den ungerundeten Werten, und
+> gerundet wird erst bei der Anzeige.
+
+### `null` statt 0 % oder NaN
+
+Nachts ist PV = 0, also müsste durch 0 geteilt werden (`NaN`). „0 %
+Eigenverbrauch“ wäre ebenfalls falsch, denn es gab gar nichts zu verbrauchen.
+`ratio()` liefert in diesem Fall `null`, und die Oberfläche zeigt „–“. Das ist
+dieselbe Regel wie bei den Messwerten: Fehlt ein Wert, ist das etwas anderes
+als 0.
+
+### Reine Funktion, wiederverwendbar
+
+`toRatios()` braucht nur Energiesummen. Für den Verlauf (Schritt 17) gilt
+dieselbe Formel für 7 Tage, 30 Tage oder ein Jahr, nur mit anderen Summen.
+Deshalb liegt sie in einer eigenen Datei und nicht in `today.ts`.
+
+### Kleine Refaktorierung: `Meter`
+
+Der Ladezustands-Balken aus den Live-Kacheln ist jetzt die gemeinsame
+Komponente `components/meter.tsx` und zeigt auch die beiden Quoten an. Sie
+bleibt „neutral“: Die Live-Kacheln rendern sie im Client, die neue Karte auf
+dem Server.
+
+### Getestet
+
+- `tsc` und ESLint ohne Befund, E2E 12/12 grün
+- Im Browser mit echten Daten: Werte passen zur Tagesbilanz, keine Konsolenfehler
