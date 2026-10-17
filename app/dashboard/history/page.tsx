@@ -1,9 +1,9 @@
 /**
- * /dashboard/history – Verlauf eines Tages: Leistungskurve, Tagesbilanz,
- * Autarkie und Eigenverbrauch.
+ * /dashboard/history – Verlauf eines Tages oder eines Zeitraums.
  *
- * Der Tag steht in der URL: /dashboard/history?date=2026-10-14
- * (ohne ?date= → heute). `searchParams` ist in dieser Next-Version ein
+ * Alles steht in der URL:
+ *   /dashboard/history?date=2026-10-14   ein Tag (ohne ?date= → heute)
+ *   /dashboard/history?range=7d          7 Tage / 30d / year (→ PeriodView) `searchParams` ist in dieser Next-Version ein
  * Promise und muss mit `await` gelesen werden. Wer es liest, macht die Seite
  * dynamisch – sie wird bei jedem Aufruf neu gerendert. Das ist hier gewollt.
  *
@@ -21,11 +21,14 @@ import {
 } from "@/components/ui/card";
 import { verifySession } from "@/lib/dal";
 import { getDayHistory } from "@/lib/data/readings";
+import { parseRange } from "@/lib/readings/period";
 
 import { SelfSufficiency } from "../self-sufficiency";
 import { TodayBalance } from "../today-balance";
 import { DayChart } from "./day-chart";
 import { DayNav } from "./day-nav";
+import { PeriodView } from "./period-view";
+import { RangeNav } from "./range-nav";
 
 export const metadata: Metadata = {
   title: "Verlauf – AmpereSolar Cockpit",
@@ -34,13 +37,27 @@ export const metadata: Metadata = {
 export default async function HistoryPage(props: PageProps<"/dashboard/history">) {
   await verifySession();
 
+  const { date, range: rawRange } = await props.searchParams;
+  // Ungültiges ?range= → null → Tagesansicht. parseRange() ist rein (kein
+  // Date.now()) und darf deshalb hier in der Seite stehen.
+  const range = parseRange(rawRange);
+
+  if (range) {
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
+        <RangeNav active={range} />
+        <PeriodView range={range} />
+      </main>
+    );
+  }
+
   // Der Wert aus der URL ist eine Benutzereingabe – getDayHistory() prüft ihn.
-  const { date } = await props.searchParams;
   const history = await getDayHistory(date);
   const hasData = history.totals !== null;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
+      <RangeNav active={null} />
       <DayNav day={history.day} today={history.today} />
 
       <Card>

@@ -21,7 +21,18 @@ import {
   type LiveReading,
 } from "@/lib/readings/live";
 import {
+  countDays,
+  RANGES,
+  rangeDays,
+  sumEnergy,
+  toPeriodBars,
+  type Bucket,
+  type PeriodBar,
+  type Range,
+} from "@/lib/readings/period";
+import {
   TODAY_COLUMNS,
+  type EnergyTotals,
   toTodayTotals,
   type TodayRow,
   type TodayTotals,
@@ -162,5 +173,52 @@ export async function getDayHistory(
     endMs,
     curve: toDayCurve(rows, startMs, endMs),
     totals: toTodayTotals(rows),
+  };
+}
+
+export type PeriodHistory = {
+  range: Range;
+  bucket: Bucket;
+  /** Erster und letzter Tag des Zeitraums (beide inklusive). */
+  from: DayString;
+  to: DayString;
+  bars: PeriodBar[];
+  totals: EnergyTotals | null;
+  /** An wie vielen der `dayCount` Tage es Messwerte gab. */
+  daysWithData: number;
+  dayCount: number;
+};
+
+/**
+ * Energien für 7 Tage, 30 Tage oder ein Jahr – gerechnet in der Datenbank
+ * (daily_energy(), Migration 0003). Zurück kommt eine Zeile je Tag statt
+ * bis zu 525.000 Minutenwerten; 366 Zeilen passen auch in eine einzige
+ * Antwort (PostgREST-Grenze 1.000 Zeilen gilt auch für rpc()).
+ */
+export async function getPeriodHistory(range: Range): Promise<PeriodHistory> {
+  await verifySession();
+
+  const { from, to } = rangeDays(range, berlinDay(Date.now()));
+  const { bucket } = RANGES[range];
+
+  const supabase = await createClient();
+  // rpc(): ruft die Funktion unter /rest/v1/rpc/daily_energy auf. Parameter
+  // und Rückgabe sind über database.types.ts typisiert.
+  const { data, error } = await supabase.rpc("daily_energy", { p_from: from, p_to: to });
+
+  if (error) {
+    console.error("[getPeriodHistory]", error.code, error.message);
+    throw new Error("Messwerte konnten nicht geladen werden.");
+  }
+
+  return {
+    range,
+    bucket,
+    from,
+    to,
+    bars: toPeriodBars(data, from, to, bucket),
+    totals: sumEnergy(data),
+    daysWithData: data.length,
+    dayCount: countDays(from, to),
   };
 }

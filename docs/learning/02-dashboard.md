@@ -664,3 +664,114 @@ Zahl der Zeilen im Zeitraum. Wird sie zu langsam, gibt es zwei nächste Stufen:
   nachgerechnet wird. Ein Jahr sind dann nur noch 365 Zeilen.
 - ein **Covering Index** auf `(ts) include (sys_*)`, damit Postgres die
   Zeilen nicht aus der Tabelle holen muss (Index-Only Scan).
+
+## Schritt 19 – Verlauf: 7 Tage, 30 Tage, Jahr
+
+> Dateien: `lib/readings/period.ts`, `lib/data/readings.ts` (`getPeriodHistory`),
+> `app/dashboard/history/{range-nav,period-view,period-chart,chart-parts}.tsx`
+> Doku: https://supabase.com/docs/reference/javascript/rpc,
+> https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/formatRange
+
+### Zeitraum in der URL
+
+```
+/dashboard/history                 → Tag (mit ?date=)
+/dashboard/history?range=7d        → heute und die 6 Tage davor
+/dashboard/history?range=30d       → letzte 30 Tage
+/dashboard/history?range=year      → letzte 12 Monate, ein Balken je Monat
+```
+
+Das ist dasselbe Muster wie bei `?date=` in Schritt 17: einfache Links, keine
+Client-State. Die Seite liest `range` und gibt bei einem gültigen Wert
+`<PeriodView>` zurück, sonst rendert sie die Tagesansicht.
+
+`parseRange()` prüft mit `Object.hasOwn(RANGES, value)` und nicht mit
+`value in RANGES`. `in` findet auch geerbte Namen. `?range=toString` wäre
+damit „gültig“, und `RANGES["toString"].bucket` ergäbe `undefined`. Ein
+E2E-Test prüft genau diesen Fall.
+
+### Eine async Server Component in der Seite
+
+`PeriodView` ist selbst `async` und holt ihre Daten mit `getPeriodHistory()`.
+Die Seite entscheidet nur, *welche* Ansicht gezeigt wird. Server Components
+dürfen an jeder Stelle im Baum Daten laden, nicht nur in `page.tsx`.
+
+### `supabase.rpc()`
+
+```ts
+const { data, error } = await supabase.rpc("daily_energy", { p_from: from, p_to: to });
+```
+
+Parameter und Rückgabe kommen aus `Functions` in `database.types.ts`. Für ein
+Jahr kommen höchstens 366 Zeilen zurück. Die 1.000-Zeilen-Grenze von PostgREST
+gilt auch für `rpc()`, wird hier aber nicht erreicht, deshalb ist kein
+seitenweises Laden nötig.
+
+### Lücken bleiben Lücken
+
+`toPeriodBars()` legt zuerst für **jeden** Tag (bzw. Monat) des Zeitraums
+einen Balken mit `null` an und trägt dann die Datenbankzeilen ein. Tage ohne
+Zeile, also ein Ausfall oder die Zeit vor dem 06.10.2026, bleiben `null`.
+Recharts zeichnet dort keinen Balken. Eine 0 würde dagegen „nichts erzeugt“
+behaupten.
+
+Im Monatsbalken macht der erste Tag mit Daten aus `null` eine Zahl
+(`(bar.pv ?? 0) + row.pv_kwh`), weitere Tage addieren sich dazu.
+
+Unter der Bilanz steht deshalb „Summe über 12 von 30 Tagen mit Messwerten“.
+Die Zahl wirkt sonst kleiner als erwartet, ohne dass klar ist, warum.
+
+### Ein Typ für alle Zeiträume: `EnergyTotals`
+
+`TodayTotals` hatte einen Zeitstempel („Stand 18:26 Uhr“), den es für 30 Tage
+nicht gibt. Deshalb gibt es jetzt zwei Typen:
+
+```ts
+type EnergyTotals = { pvKwh, loadKwh, … };              // jeder Zeitraum
+type TodayTotals  = EnergyTotals & { timestamp: string }; // ein Tag
+```
+
+`toRatios()` und `SelfSufficiency` nehmen `EnergyTotals` an, und
+`TodayBalance` nimmt beide Typen. `"timestamp" in totals` grenzt den Typ ein:
+Nur bei Tagessummen erscheint „Stand … Uhr“. Die Formeln aus Schritt 16 gelten
+damit unverändert für jeden Zeitraum.
+
+### `Intl.DateTimeFormat.formatRange()`
+
+```ts
+formatDayRange("2026-10-11", "2026-10-17")  // "11.–17. Oktober 2026"
+formatDayRange("2025-11-01", "2026-10-17")  // "1. November 2025 – 17. Oktober 2026"
+```
+
+`formatRange()` lässt weg, was sich wiederholt (Monat, Jahr). Sonst müsste
+man das mit Fallunterscheidungen selbst bauen.
+
+### Kategorie-Achse statt Zahlen-Achse
+
+Die Tageskurve hat eine x-Achse mit `type="number"`, weil Abstand dort Zeit
+bedeutet. Bei den Balken ist jeder Tag eine **Kategorie** mit gleich breitem
+Platz. Passen nicht alle Beschriftungen nebeneinander, lässt Recharts einige
+aus (bei 30 Tagen nur jede zweite).
+
+Farben und Tooltip-Zeile teilen sich beide Diagramme über `chart-parts.tsx`.
+
+### Stolperstein: `getByRole("link", { name: "Tag" })`
+
+Playwright vergleicht `name` standardmäßig als **Teiltext**, ohne Groß- und
+Kleinschreibung zu beachten. „Tag“ traf daher auch „7 Tage“ und „30 Tage“,
+und der Test scheiterte an „strict mode violation: resolved to 3 elements“.
+Mit `{ name: "Tag", exact: true }` ist der Locator eindeutig.
+
+### Getestet
+
+- `tsc`, ESLint ohne Befund; E2E 16/16 grün (neu: Zeitraum wechseln, ungültiger Zeitraum)
+- Im Browser (Screenshots, Hell und Dunkel): 7 T, 30 T und Jahr mit echten
+  Daten, keine Konsolenfehler. Der 13.10. ergibt 16,4 / 22,8 / 7,0 kWh, wie bei
+  der Prüfung von Migration 0003.
+
+### Übung (optional)
+
+Zeiträume blättern: `?range=7d&date=2026-10-10` zeigt die 7 Tage **bis** zum
+10.10. `rangeDays()` bekommt dann statt `today` den geprüften Tag
+(`parseDay()`), und `RangeNav` bzw. ein neuer Pfeil-Navigator setzt `date`
+um 7 Tage zurück.

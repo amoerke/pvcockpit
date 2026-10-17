@@ -28,16 +28,23 @@ export type TodayRow = Pick<
   | "sys_house_power"
 >;
 
-/** DTO für die Oberfläche. `null` = keine Messwerte (Anzeige "–"). */
-export type TodayTotals = {
-  /** Zeitpunkt der letzten berücksichtigten Messung als ISO-String (UTC). */
-  timestamp: string;
+/**
+ * Energiesummen eines beliebigen Zeitraums (Tag, 7 Tage, Jahr).
+ * `null` = keine Messwerte (Anzeige "–").
+ */
+export type EnergyTotals = {
   pvKwh: number | null;
   loadKwh: number | null;
   batteryChargeKwh: number | null;
   batteryDischargeKwh: number | null;
   gridImportKwh: number | null;
   gridExportKwh: number | null;
+};
+
+/** Summen eines Tages aus den Minutenwerten – plus Stand der letzten Messung. */
+export type TodayTotals = EnergyTotals & {
+  /** Zeitpunkt der letzten berücksichtigten Messung als ISO-String (UTC). */
+  timestamp: string;
 };
 
 /**

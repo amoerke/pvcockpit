@@ -1,5 +1,6 @@
 /**
- * Autarkiegrad und Eigenverbrauchsquote für heute.
+ * Autarkiegrad und Eigenverbrauchsquote – für heute, einen Tag oder einen
+ * Zeitraum (dieselben Formeln, nur andere Summen).
  *
  * Neutrale Komponente (nur Props), wie TodayBalance: wird auf dem Server
  * gerendert und beim Neuladen der Seite neu berechnet.
@@ -17,13 +18,13 @@ import {
 } from "@/components/ui/card";
 import { formatEnergy, formatPercent } from "@/lib/format";
 import { toRatios } from "@/lib/readings/ratios";
-import type { TodayTotals } from "@/lib/readings/today";
+import type { EnergyTotals } from "@/lib/readings/today";
 
 export function SelfSufficiency({
   totals,
   title = "Unabhängigkeit heute",
 }: {
-  totals: TodayTotals | null;
+  totals: EnergyTotals | null;
   title?: string;
 }) {
   const ratios = toRatios(totals);
@@ -32,7 +33,7 @@ export function SelfSufficiency({
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>Berechnet aus der Tagesbilanz</CardDescription>
+        <CardDescription>Berechnet aus der Energiebilanz</CardDescription>
       </CardHeader>
 
       <CardContent>

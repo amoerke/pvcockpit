@@ -1,9 +1,10 @@
 /**
- * Tagesbilanz "Heute": sechs Energiewerte in kWh.
+ * Energiebilanz: sechs Energiewerte in kWh – für heute, einen Tag im
+ * Verlauf oder einen ganzen Zeitraum (7 Tage, 30 Tage, Jahr).
  *
- * Neutrale Komponente (nur Props). Sie wird vorerst nur auf dem Server
- * gerendert und aktualisiert sich NICHT live – beim Neuladen der Seite
- * wird neu aufsummiert.
+ * Neutrale Komponente (nur Props). Sie wird nur auf dem Server gerendert
+ * und aktualisiert sich NICHT live – beim Neuladen der Seite wird neu
+ * aufsummiert.
  */
 import {
   ArrowDownToLine,
@@ -23,24 +24,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatEnergy, formatTime } from "@/lib/format";
-import type { TodayTotals } from "@/lib/readings/today";
+import type { EnergyTotals, TodayTotals } from "@/lib/readings/today";
 
 export function TodayBalance({
   totals,
   title = "Heute",
+  description,
 }: {
-  totals: TodayTotals | null;
+  totals: TodayTotals | EnergyTotals | null;
   /** Überschrift – im Verlauf steht hier "Tagesbilanz" statt "Heute". */
   title?: string;
+  /** Ersetzt die Standard-Unterzeile (z. B. "Summe über 6 von 7 Tagen"). */
+  description?: string;
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>
-          {totals
-            ? `Aus den Minutenwerten berechnet, Stand ${formatTime(totals.timestamp)} Uhr`
-            : "Für diesen Tag liegen keine Messwerte vor."}
+          {description ?? defaultDescription(totals)}
         </CardDescription>
       </CardHeader>
 
@@ -76,6 +78,15 @@ export function TodayBalance({
       )}
     </Card>
   );
+}
+
+function defaultDescription(totals: TodayTotals | EnergyTotals | null): string {
+  if (!totals) return "Für diesen Tag liegen keine Messwerte vor.";
+  // "in" grenzt den Typ ein: Nur Tagessummen haben einen Zeitstempel.
+  if ("timestamp" in totals) {
+    return `Aus den Minutenwerten berechnet, Stand ${formatTime(totals.timestamp)} Uhr`;
+  }
+  return "Aus den Minutenwerten berechnet";
 }
 
 function Entry({

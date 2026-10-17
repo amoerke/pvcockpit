@@ -2,11 +2,11 @@
  * Autarkiegrad und Eigenverbrauchsquote aus Energiesummen.
  *
  * Bewusst getrennt von today.ts: Die Formeln gelten für JEDEN Zeitraum
- * (heute, 7 Tage, Jahr) – der Verlauf in Schritt 17 kann sie wiederverwenden.
+ * (heute, 7 Tage, Jahr) – der Verlauf nutzt sie für jeden Zeitraum.
  *
  * Bewusst ohne "server-only": reine Logik, testbar.
  */
-import type { TodayTotals } from "@/lib/readings/today";
+import type { EnergyTotals } from "@/lib/readings/today";
 
 export type Ratios = {
   /** Anteil des Hausverbrauchs, der NICHT aus dem Netz kam (0–100). */
@@ -27,7 +27,7 @@ export type Ratios = {
  * abends entladen wird, ist weder Netzbezug noch Einspeisung – es zählt
  * automatisch für beide Kennzahlen als "selbst genutzt".
  */
-export function toRatios(totals: TodayTotals | null): Ratios {
+export function toRatios(totals: EnergyTotals | null): Ratios {
   const autarky = ratio(totals?.loadKwh, totals?.gridImportKwh);
   const selfConsumption = ratio(totals?.pvKwh, totals?.gridExportKwh);
 

@@ -72,6 +72,33 @@ test.describe("Mit Login", () => {
     ).toBeDisabled();
   });
 
+  test("Verlauf: Zeitraum steht in der URL und lässt sich wechseln", async ({ page }) => {
+    await page.goto("/dashboard/history");
+    const ranges = page.getByRole("navigation", { name: "Zeitraum wählen" });
+    // exact: Ohne würde "Tag" auch "7 Tage" und "30 Tage" treffen (Teiltext).
+    await expect(ranges.getByRole("link", { name: "Tag", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await ranges.getByRole("link", { name: "7 Tage" }).click();
+    await expect(page).toHaveURL("/dashboard/history?range=7d");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Letzte 7 Tage");
+    await expect(ranges.getByRole("link", { name: "7 Tage" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await ranges.getByRole("link", { name: "Jahr" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Letzte 12 Monate");
+  });
+
+  test("Verlauf: ungültiger Zeitraum zeigt die Tagesansicht", async ({ page }) => {
+    // "toString" steckt in jedem Objekt – parseRange() darf es trotzdem nicht annehmen.
+    await page.goto("/dashboard/history?range=toString");
+    await expect(page.getByRole("navigation", { name: "Tag wählen" })).toBeVisible();
+  });
+
   test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
     await page.goto("/dashboard");
 
