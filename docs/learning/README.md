@@ -32,7 +32,17 @@ Alles außer `/login` (und den Auth-Callbacks) ist geschützt.
 
 Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-Werten.
 
+## Meilenstein 3 – Docker
+
+App als Container ausliefern: Multi-Stage-Dockerfile, `output: "standalone"`,
+Compose. Supabase bleibt extern.
+
+| # | Schritt | Konzept |
+|---|---------|---------|
+| 1 | Dockerfile, `.dockerignore`, Compose | Multi-Stage, Standalone-Output, Build-Args für `NEXT_PUBLIC_`, Nicht-Root-Nutzer |
+
 ## Kapitel
 
 - [Kapitel 1 – Authentifizierung](01-auth.md)
 - [Kapitel 2 – Dashboard](02-dashboard.md)
+- [Kapitel 3 – Docker](03-docker.md)

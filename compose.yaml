@@ -1,0 +1,17 @@
+# Startet die App als Container. Supabase läuft extern (self-hosted), daher
+# gibt es hier nur den Web-Dienst.
+#
+# Compose liest standardmäßig `.env`, nicht `.env.local`. Deshalb:
+#   docker compose --env-file .env.local up --build
+services:
+  web:
+    build:
+      context: .
+      # Werte werden beim Build ins Browser-JavaScript eingebacken
+      # (NEXT_PUBLIC_), eine spätere Änderung erfordert `--build`.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

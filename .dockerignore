@@ -1,0 +1,27 @@
+# Alles, was nicht ins Build-Context soll: kleiner, schneller, keine Geheimnisse.
+
+# Abhängigkeiten und Build-Ergebnisse werden im Image neu erzeugt
+node_modules
+.next
+tsconfig.tsbuildinfo
+
+# Geheimnisse: .env.local & Co. dürfen nie ins Image
+.env*
+
+# Versionsverwaltung und Systemdateien
+.git
+.DS_Store
+
+# Tests-Ausgaben (e2e/ bleibt drin: playwright.config.ts importiert daraus und
+# wird beim `next build` mit-typgeprüft; ins Runner-Image gelangt es nicht)
+playwright-report
+test-results
+.playwright-mcp
+
+# Doku wird zur Laufzeit nicht gebraucht
+docs
+
+# Docker-Dateien selbst
+Dockerfile
+compose.yaml
+.dockerignore
