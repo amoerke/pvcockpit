@@ -109,3 +109,18 @@ Neustart des Hosts wieder, außer man hat ihn selbst gestoppt.
 - `npm run build` lokal: Standalone-Ordner mit `server.js` entsteht.
 - `docker build` mit Dummy-Werten, Container gestartet: `/login` antwortet
   mit HTTP 200, Prozess läuft als `nextjs` (UID 1001), Image ca. 336 MB.
+
+## Deployment
+
+Die App läuft als Docker-Container auf dem VPS unter
+<https://pv.dataminer.cloud> (deployed vom Nutzer selbst).
+
+Damit die Links in den Auth-Mails stimmen, zeigen in Supabase
+`GOTRUE_SITE_URL` und die erlaubten Redirect-URLs auf diese Domain statt auf
+`localhost:3000`. Andernfalls führt der Link aus der Einladung oder dem
+Passwort-Reset ins Leere.
+
+### Getestet (18.10.2026)
+
+- „Passwort vergessen“ auf der deployten Seite: Die Mail kommt an, der Link
+  führt über `/auth/confirm` auf `pv.dataminer.cloud`.
