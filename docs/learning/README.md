@@ -28,9 +28,24 @@ Alles außer `/login` (und den Auth-Callbacks) ist geschützt.
 | 7 | Einladung & Passwort vergessen | Route Handler, Token-Hash-Flow, E-Mail-Vorlagen |
 | 8 | E2E-Tests | Playwright |
 
-## Meilenstein 2 – Dashboard (später)
+## Meilenstein 2 – Dashboard
 
 Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-Werten.
+
+| # | Schritt | Konzept |
+|---|---------|---------|
+| 9 | Typisierte Datenbankzugriffe | Generierte Typen, `Database`-Generic |
+| 10 | Lesezugriff (Migration 0001) | Rechte vs. Row Level Security, Rollen in Supabase |
+| 11 | Verschachteltes Layout, Theme-Umschalter | Layouts, Client-Inseln, `next-themes` |
+| 12–13 | Live-Kacheln und Energiefluss | Daten in Server Components, `error.tsx`, Zeitzonen |
+| 14 | Live-Updates | Supabase Realtime, `useEffect` mit Cleanup |
+| 15 | Heute-Bilanz | Energie aus Leistung × Zeit, `Promise.all` |
+| 16 | Autarkie und Eigenverbrauch | Reine Funktionen, `null` statt NaN |
+| 17 | Verlauf: Tagesansicht | Zustand in der URL (`?date=`), Recharts |
+| 18 | `daily_energy()` (Migration 0003) | Rechnen in SQL, Rechte auf Funktionen |
+| 19 | Verlauf: 7 Tage, 30 Tage, Jahr | `supabase.rpc()`, Lücken in Daten, `formatRange()` |
+
+Später: Technik-Seite (PV-Strings, Batterietemperatur), danach Euro-Werte.
 
 ## Meilenstein 3 – Docker
 
