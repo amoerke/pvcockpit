@@ -44,8 +44,10 @@ Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-We
 | 17 | Verlauf: Tagesansicht | Zustand in der URL (`?date=`), Recharts |
 | 18 | `daily_energy()` (Migration 0003) | Rechnen in SQL, Rechte auf Funktionen |
 | 19 | Verlauf: 7 Tage, 30 Tage, Jahr | `supabase.rpc()`, Lücken in Daten, `formatRange()` |
+| 20 | Tarife und `daily_savings()` (Migration 0004) | Preise mit gültig-ab, `numeric`, `LEFT JOIN LATERAL` |
+| 21 | Seite Ersparnis | Zwei Werte in der URL, Umschalter Ersparnis/Einspeisung |
 
-Später: Technik-Seite (PV-Strings, Batterietemperatur), danach Euro-Werte.
+Die zunächst geplante Technik-Seite entfällt zugunsten der Ersparnis-Seite.
 
 ## Meilenstein 3 – Docker
 

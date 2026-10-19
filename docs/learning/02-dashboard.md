@@ -775,3 +775,69 @@ Zeiträume blättern: `?range=7d&date=2026-10-10` zeigt die 7 Tage **bis** zum
 10.10. `rangeDays()` bekommt dann statt `today` den geprüften Tag
 (`parseDay()`), und `RangeNav` bzw. ein neuer Pfeil-Navigator setzt `date`
 um 7 Tage zurück.
+
+## Schritt 20 – Tarife und Ersparnis in der Datenbank: `daily_savings()`
+
+Datei: `supabase/migrations/0004_tariffs_daily_savings.sql`. Statt der
+Technik-Seite gibt es eine Seite für die Ersparnis (Entscheidung vom
+19.10.2026). Dieser Schritt legt das Fundament in der Datenbank.
+
+### Was ist die Ersparnis?
+
+- **Ersparnis** = Eigenverbrauch × Arbeitspreis. Eigenverbrauch ist
+  Hausverbrauch − Netzbezug, also jede kWh, die nicht gekauft werden musste,
+  egal ob direkt vom Dach oder aus der Batterie.
+- **Einspeisevergütung** = eingespeiste kWh × 8 ct.
+- Der **Arbeitspreis** muss alle Bestandteile pro kWh enthalten (Energie,
+  Netzentgelt, Umlagen, Steuern, MwSt), denn jede selbst verbrauchte kWh spart
+  alle. Die Zeile „Energiekosten“ allein (hier 8,62 ct) ist nur ein Teil davon.
+- Der **Grundpreis** zählt nicht: Er fällt mit und ohne PV an.
+
+### Preise mit „gültig ab“
+
+Preise ändern sich. Eine Konstante im Code würde bei einer Preisänderung
+**rückwirkend** alle alten Zeiträume mit dem neuen Preis rechnen. Deshalb hat
+jede Zeile in `tariffs` ein `valid_from`. Sie gilt bis zur nächsten Zeile. Eine
+Preisänderung ist eine neue Zeile, keine Änderung der alten.
+
+`valid_from` ist der Primärschlüssel: Pro Tag kann nur ein Tarif beginnen, und
+der zugehörige Index macht die Suche nach dem passenden Tarif schnell.
+
+### `numeric` für Geld
+
+`double precision` ist eine Gleitkommazahl: schnell, aber nicht exakt
+(`0.1 + 0.2 = 0.30000000000000004`). Für Energie in kWh reicht das, für
+Geldbeträge nimmt man `numeric`. Die Funktion wandelt die kWh nach `numeric`,
+bevor sie mit dem Preis multipliziert. Gerundet wird erst in der Anzeige.
+
+### `LEFT JOIN LATERAL`: der Tarif des Tages
+
+Für jeden Tag brauchen wir „die jüngste Tarifzeile mit `valid_from` ≤ Tag“.
+Eine normale Unterabfrage im `FROM` kann nicht auf Spalten der Tabelle davor
+zugreifen. Mit `LATERAL` darf sie das: Sie läuft einmal pro Tag und sieht
+`e.day`.
+
+```sql
+left join lateral (
+  select … from public.tariffs as tr
+  where tr.valid_from <= e.day
+  order by tr.valid_from desc
+  limit 1
+) as t on true
+```
+
+`left join … on true` behält Tage, für die es keinen Tarif gibt. Die
+Geldspalten sind dann `null`, und die App kann „kein Tarif hinterlegt“
+anzeigen, statt still 0 € zu rechnen.
+
+### Funktion auf Funktion
+
+`daily_savings()` ruft `daily_energy()` auf, statt die Leistungen erneut zu
+summieren. Die Rechenregel für Energie steht so weiter an **einer** Stelle.
+Ändert sie sich, rechnet die Ersparnis automatisch mit.
+
+### Erster Tarif aus den Daten
+
+`insert … select min(ts) …` trägt den Tag der ersten Messung als `valid_from`
+ein, ohne dass jemand das Datum nachschlagen muss. `on conflict do nothing`
+macht die Migration wiederholbar.
