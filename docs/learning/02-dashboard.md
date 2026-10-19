@@ -841,3 +841,12 @@ summieren. Die Rechenregel für Energie steht so weiter an **einer** Stelle.
 `insert … select min(ts) …` trägt den Tag der ersten Messung als `valid_from`
 ein, ohne dass jemand das Datum nachschlagen muss. `on conflict do nothing`
 macht die Migration wiederholbar.
+
+### Geprüft (19.10.2026, im SQL-Editor)
+
+- `tariffs`: eine Zeile, gültig ab 15.09.2026 (erste Messung), 27,870 / 8,000 ct.
+- `daily_savings()` als `authenticated` für 12.–19.10.: z. B. 12.10. mit
+  11,81 kWh Eigenverbrauch × 0,2787 € = 3,29 € und 0,09 kWh Einspeisung
+  × 0,08 € = 0,01 €. Die vielen Nachkommastellen zeigen, dass `numeric` exakt
+  rechnet. Gerundet wird erst in der App.
+- Als `anon`: `permission denied for function daily_savings`.
