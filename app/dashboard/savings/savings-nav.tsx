@@ -1,5 +1,5 @@
 /**
- * Zwei Umschalter: Zeitraum (7 Tage | 30 Tage | Jahr) und Ansicht
+ * Zwei Umschalter: Zeitraum (7 Tage | 30 Tage | Jahr | Alles) und Ansicht
  * (Gesamt | Ersparnis | Einspeisung).
  *
  * Beide Werte stehen in der URL. Jeder Link trägt BEIDE: Der Zeitraum-Link
@@ -8,14 +8,19 @@
  */
 import Link from "next/link";
 
-import { RANGES, type Range } from "@/lib/readings/period";
-import { SAVINGS_VIEWS, savingsHref, type SavingsView } from "@/lib/readings/savings";
+import {
+  SAVINGS_RANGES,
+  SAVINGS_VIEWS,
+  savingsHref,
+  type SavingsRange,
+  type SavingsView,
+} from "@/lib/readings/savings";
 import { cn } from "@/lib/utils";
 
-export function SavingsNav({ range, view }: { range: Range; view: SavingsView }) {
-  const ranges = (Object.keys(RANGES) as Range[]).map((r) => ({
+export function SavingsNav({ range, view }: { range: SavingsRange; view: SavingsView }) {
+  const ranges = (Object.keys(SAVINGS_RANGES) as SavingsRange[]).map((r) => ({
     href: savingsHref(r, view),
-    label: RANGES[r].label,
+    label: SAVINGS_RANGES[r].label,
     active: r === range,
   }));
 

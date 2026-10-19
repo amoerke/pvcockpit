@@ -6,19 +6,20 @@
 import "server-only";
 
 import { verifySession } from "@/lib/dal";
-import { countDays, RANGES, rangeDays, type Bucket, type Range } from "@/lib/readings/period";
+import { countDays, type Bucket } from "@/lib/readings/period";
 import {
-  countDaysWithoutTariff,
+  savingsPeriod,
   sumSavings,
   toSavingsBars,
   type SavingsBar,
+  type SavingsRange,
   type SavingsTotals,
 } from "@/lib/readings/savings";
 import { createClient } from "@/lib/supabase/server";
 import { berlinDay, type DayString } from "@/lib/time";
 
 export type SavingsHistory = {
-  range: Range;
+  range: SavingsRange;
   bucket: Bucket;
   from: DayString;
   to: DayString;
@@ -30,18 +31,40 @@ export type SavingsHistory = {
 };
 
 /**
- * Ersparnis und Einspeisevergütung für 7 Tage, 30 Tage oder ein Jahr.
- * Die Euro-Beträge rechnet daily_savings() mit dem jeweils gültigen Tarif
- * (Migration 0004) – die App summiert nur noch.
+ * Ersparnis und Einspeisevergütung für 7 Tage, 30 Tage, ein Jahr oder alles.
+ * Die Euro-Beträge rechnet und gruppiert savings_by_period() (Migration 0005)
+ * – die App ergänzt nur Lücken und summiert.
  */
-export async function getSavingsHistory(range: Range): Promise<SavingsHistory> {
+export async function getSavingsHistory(range: SavingsRange): Promise<SavingsHistory> {
   await verifySession();
 
-  const { from, to } = rangeDays(range, berlinDay(Date.now()));
-  const { bucket } = RANGES[range];
-
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("daily_savings", { p_from: from, p_to: to });
+  const today = berlinDay(Date.now());
+
+  // Nur für "Alles": Wo beginnt der Zeitraum? Der älteste Tarif gilt ab der
+  // ersten Messung (Migration 0004). Eine Zeile, ein Feld – billig.
+  let firstDay: DayString | null = null;
+  if (range === "all") {
+    const { data, error } = await supabase
+      .from("tariffs")
+      .select("valid_from")
+      .order("valid_from")
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error("[getSavingsHistory] tariffs", error.code, error.message);
+      throw new Error("Ersparnis konnte nicht geladen werden.");
+    }
+    firstDay = data?.valid_from ?? null;
+  }
+
+  const { from, to, bucket } = savingsPeriod(range, today, firstDay);
+
+  const { data, error } = await supabase.rpc("savings_by_period", {
+    p_from: from,
+    p_to: to,
+    p_bucket: bucket,
+  });
 
   if (error) {
     console.error("[getSavingsHistory]", error.code, error.message);
@@ -55,8 +78,8 @@ export async function getSavingsHistory(range: Range): Promise<SavingsHistory> {
     to,
     bars: toSavingsBars(data, from, to, bucket),
     totals: sumSavings(data),
-    daysWithData: data.length,
-    daysWithoutTariff: countDaysWithoutTariff(data),
+    daysWithData: data.reduce((n, row) => n + row.days_with_data, 0),
+    daysWithoutTariff: data.reduce((n, row) => n + row.days_without_tariff, 0),
     dayCount: countDays(from, to),
   };
 }

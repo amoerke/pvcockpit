@@ -915,3 +915,69 @@ hin, statt still mit 0 € zu rechnen.
 „Gesamt seit Beginn“ als vierter Zeitraum: `from` ist das `valid_from` des
 ältesten Tarifs (oder die erste Messung), `to` ist heute. Was bedeutet das für
 `bucket` bei mehreren Jahren?
+
+## Schritt 22 – „Alles“: Bucket nach Laufzeit, Gruppieren in SQL
+
+Ursprünglich die Übung aus Schritt 21, begonnen vom Nutzer (`bucketFor`,
+`Bucket` als explizite Union), fertiggestellt mit Migration 0005.
+
+### Der Bucket hängt vom Zeitraum ab
+
+„Alles“ wächst jeden Tag. Ein fester Bucket passt nicht: `year` ergäbe heute
+einen einzigen Balken, `day` in drei Jahren über 1.000. `bucketFor(from, to)`
+wählt deshalb nach Länge: bis 62 Tage Tage, bis ca. 3 Jahre Monate, danach
+Jahre.
+
+### Warum nicht `bucket: bucketFor` in `RANGES`?
+
+So lautete der erste Ansatz. Dann wäre `RANGES[range].bucket` mal ein String,
+mal eine Funktion, und jede Stelle, die den Wert liest, müsste beides
+unterscheiden. Stattdessen:
+
+- `RANGES` bleibt unverändert. Der Verlauf merkt nichts von „Alles“.
+- `SAVINGS_RANGES = { ...RANGES, all: { …, bucket: null } }` erweitert die
+  Liste nur für die Ersparnis-Seite.
+- `savingsPeriod(range, today, firstDay)` liefert `from`, `to` **und**
+  `bucket`. Die Seite liest den Bucket aus dem Ergebnis, nicht aus der
+  Konstante.
+
+`Bucket` ist jetzt eine explizite Union `"day" | "month" | "year"`. Aus
+`RANGES` abgeleitet könnte der Typ nie `"year"` enthalten.
+
+### 1.000-Zeilen-Grenze: in SQL gruppieren
+
+PostgREST liefert höchstens 1.000 Zeilen, auch bei `rpc()`. `daily_savings()`
+gibt eine Zeile pro Tag zurück. Nach ca. 2¾ Jahren würden bei „Alles“ still
+die neuesten Tage fehlen, ohne Fehlermeldung, nur mit falscher Summe.
+
+`savings_by_period(p_from, p_to, p_bucket)` gruppiert deshalb schon in
+Postgres:
+
+- `to_char(day, 'YYYY-MM')` erzeugt dieselben Schlüssel, die die App für
+  ihre Balken verwendet. `bucketKey()` in TypeScript und `to_char()` in SQL
+  müssen zusammenpassen.
+- `sum(…) filter (where savings_eur is not null)` zählt die kWh nur für Tage
+  mit Tarif, damit kWh und € zueinander passen.
+- `count(*) filter (where …)` zählt die Tage ohne Tarif in derselben Abfrage.
+- `where p_bucket in ('day', 'month', 'year')`: Ein unbekannter Wert ergibt
+  keine Zeilen, statt still nach Jahr zu gruppieren.
+
+Die Seite nutzt die Funktion für **alle** Zeiträume. So gibt es nur einen
+Datenweg, und die App ergänzt nur noch die Lücken.
+
+### Wo beginnt „Alles“?
+
+Beim ältesten Tarif (`tariffs.valid_from`). Er gilt laut Migration 0004 ab der
+ersten Messung. Die Abfrage kostet nur eine Zeile mit einem Feld und läuft nur
+bei `range=all`.
+
+### Geprüft (19.10.2026)
+
+- SQL-Editor: `savings_by_period(…, 'month')` liefert eine Zeile `2026-10` mit
+  136,83 kWh / 38,13 € / 0,13 €, also dieselben Werte wie die 30-Tage-Ansicht.
+  Es gibt keine Zeile `2026-09`, weil die `sys_*`-Werte erst ab dem 06.10.
+  vorliegen. `'year'` liefert dasselbe als `2026`. Als `anon` kommt
+  `permission denied`.
+- `tsc`, ESLint ohne Befund. E2E 19/19 grün (neu: „Alles“).
+- Im Browser: „Alles“ zeigt 15.09.–19.10.2026 mit Tagesbalken (35 Tage ≤ 62)
+  und 38,26 € gesamt. 7 Tage, Einspeisung: 0,05 € aus 0,6 kWh.

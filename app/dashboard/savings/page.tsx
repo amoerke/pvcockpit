@@ -2,7 +2,7 @@
  * /dashboard/savings – Ersparnis durch Eigenverbrauch und Einspeisevergütung.
  *
  * Zwei unabhängige Werte in der URL:
- *   ?range=7d|30d|year              Zeitraum (ohne → 30 Tage)
+ *   ?range=7d|30d|year|all          Zeitraum (ohne → 30 Tage)
  *   ?view=total|savings|feedin      was das Diagramm zeigt (ohne → Gesamt)
  * Beide sind Benutzereingaben und werden geprüft; Unbekanntes fällt auf den
  * Standard zurück.
@@ -19,12 +19,18 @@ import {
 import { verifySession } from "@/lib/dal";
 import { getSavingsHistory } from "@/lib/data/savings";
 import { formatDayRange } from "@/lib/format";
-import { parseRange, RANGES } from "@/lib/readings/period";
-import { DEFAULT_SAVINGS_RANGE, parseView, SAVINGS_VIEWS } from "@/lib/readings/savings";
+import {
+  parseSavingsRange,
+  parseView,
+  SAVINGS_RANGES,
+  SAVINGS_VIEWS,
+} from "@/lib/readings/savings";
 
 import { SavingsChart } from "./savings-chart";
 import { SavingsNav } from "./savings-nav";
 import { SavingsSummary } from "./savings-summary";
+
+const BUCKET_LABELS = { day: "Tag", month: "Monat", year: "Jahr" } as const;
 
 export const metadata: Metadata = {
   title: "Ersparnis – AmpereSolar Cockpit",
@@ -34,11 +40,13 @@ export default async function SavingsPage(props: PageProps<"/dashboard/savings">
   await verifySession();
 
   const { range: rawRange, view: rawView } = await props.searchParams;
-  const range = parseRange(rawRange) ?? DEFAULT_SAVINGS_RANGE;
+  const range = parseSavingsRange(rawRange);
   const view = parseView(rawView);
 
   const history = await getSavingsHistory(range);
-  const { title, bucket } = RANGES[range];
+  const { title } = SAVINGS_RANGES[range];
+  // Der Bucket kommt aus den Daten: Bei "Alles" hängt er von der Laufzeit ab.
+  const { bucket } = history;
 
   let coverage = history.totals
     ? `Summe über ${history.daysWithData - history.daysWithoutTariff} von ${history.dayCount} Tagen mit Messwerten`
@@ -61,7 +69,7 @@ export default async function SavingsPage(props: PageProps<"/dashboard/savings">
       <Card>
         <CardHeader>
           <CardTitle>
-            {SAVINGS_VIEWS[view].label} je {bucket === "day" ? "Tag" : "Monat"}
+            {SAVINGS_VIEWS[view].label} je {BUCKET_LABELS[bucket]}
           </CardTitle>
           <CardDescription>
             Ersparnis: selbst verbrauchter Strom × Arbeitspreis. Einspeisung:

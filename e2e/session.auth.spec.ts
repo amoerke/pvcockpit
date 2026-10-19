@@ -139,6 +139,21 @@ test.describe("Mit Login", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
+  test("Ersparnis: Alles zeigt den Zeitraum seit Beginn", async ({ page }) => {
+    await page.goto("/dashboard/savings?view=savings");
+    await page
+      .getByRole("navigation", { name: "Zeitraum wählen" })
+      .getByRole("link", { name: "Alles" })
+      .click();
+    await expect(page).toHaveURL("/dashboard/savings?range=all&view=savings");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Ersparnis · Seit Beginn",
+    );
+    // Welcher Bucket (Tag/Monat/Jahr) gilt, hängt vom Datum ab – geprüft wird
+    // nur, dass Daten da sind (seit 15.09.2026 gibt es einen Tarif).
+    await expect(page.getByText(/^Summe über \d+ von \d+ Tagen/)).toBeVisible();
+  });
+
   test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
     await page.goto("/dashboard");
 

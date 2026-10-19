@@ -188,6 +188,19 @@ export type Database = {
           feed_in_eur: number | null;
         }[];
       };
+      // Migration 0005. € null = im Zeitraum kein Tag mit Tarif.
+      savings_by_period: {
+        Args: { p_from: string; p_to: string; p_bucket: string };
+        Returns: {
+          period: string;
+          self_consumption_kwh: number;
+          grid_export_kwh: number;
+          savings_eur: number | null;
+          feed_in_eur: number | null;
+          days_with_data: number;
+          days_without_tariff: number;
+        }[];
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Balkendiagramm in Euro je Tag bzw. Monat.
+ * Balkendiagramm in Euro je Tag, Monat oder Jahr.
  *
  * - "Gesamt": Ersparnis und Einspeisung GESTAPELT – die Höhe ist die Summe,
  *   die Anteile bleiben sichtbar.
@@ -48,7 +48,10 @@ export function SavingsChart({
   bucket: Bucket;
   view: SavingsView;
 }) {
-  const formatKey = bucket === "day" ? formatShortDay : formatMonth;
+  // Jahresschlüssel ("2026") brauchen keine Formatierung.
+  const formatKey = { day: formatShortDay, month: formatMonth, year: (key: string) => key }[
+    bucket
+  ];
   const series = SERIES_BY_VIEW[view];
   // Höchster Balken der sichtbaren Serien (gestapelt = Summe).
   const max = Math.max(

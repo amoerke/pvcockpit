@@ -23,7 +23,9 @@ export const RANGES = {
 } as const;
 
 export type Range = keyof typeof RANGES;
-export type Bucket = (typeof RANGES)[Range]["bucket"];
+// Explizit statt aus RANGES abgeleitet: "year" gibt es nur bei "Alles" auf
+// der Ersparnis-Seite (lib/readings/savings.ts), nicht in RANGES.
+export type Bucket = "day" | "month" | "year";
 
 /**
  * Prüft den Wert aus der URL. Wie bei ?date= gilt: Benutzereingabe.
