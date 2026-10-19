@@ -41,6 +41,34 @@ export function formatEnergyTick(kwh: number): string {
   return `${tickFormat.format(kwh)} kWh`;
 }
 
+/**
+ * Euro mit Cent: 3.29 → "3,29 €". style "currency" kennt die deutsche
+ * Schreibweise (Komma, Leerzeichen vor €) – kein eigenes Zusammensetzen.
+ */
+const euroFormat = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+
+export function formatEuro(eur: number | null): string {
+  if (eur === null) return NO_VALUE;
+  return euroFormat.format(eur);
+}
+
+/**
+ * Achsenbeschriftung: 3 → "3 €", 0.005 → "0,005 €" – ohne erzwungene Cents.
+ * Drei Stellen statt zwei: Die Einspeisung liegt bei wenigen Cent pro Tag,
+ * Recharts setzt Striche bei 0,005 € – auf Cent gerundet stünde dort zweimal
+ * "0,01 €".
+ */
+const euroTickFormat = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 3,
+});
+
+export function formatEuroTick(eur: number): string {
+  return euroTickFormat.format(eur);
+}
+
 /** 20.9 → "21 %" */
 export function formatPercent(value: number | null): string {
   if (value === null) return NO_VALUE;

@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Übersicht" },
   { href: "/dashboard/history", label: "Verlauf" },
+  { href: "/dashboard/savings", label: "Ersparnis" },
 ] as const;
 
 export function DashboardNav() {

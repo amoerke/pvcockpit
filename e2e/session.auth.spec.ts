@@ -99,6 +99,46 @@ test.describe("Mit Login", () => {
     await expect(page.getByRole("navigation", { name: "Tag wählen" })).toBeVisible();
   });
 
+  test("Ersparnis: Zeitraum und Ansicht bleiben beim Umschalten erhalten", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page
+      .getByRole("navigation", { name: "Hauptnavigation" })
+      .getByRole("link", { name: "Ersparnis" })
+      .click();
+    await expect(page).toHaveURL("/dashboard/savings");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Ersparnis · Letzte 30 Tage",
+    );
+
+    const ranges = page.getByRole("navigation", { name: "Zeitraum wählen" });
+    const views = page.getByRole("navigation", { name: "Ansicht wählen" });
+
+    await views.getByRole("link", { name: "Einspeisung" }).click();
+    await expect(page).toHaveURL("/dashboard/savings?view=feedin");
+
+    // Zeitraum wechseln – die Ansicht muss in der URL bleiben.
+    await ranges.getByRole("link", { name: "7 Tage" }).click();
+    await expect(page).toHaveURL("/dashboard/savings?range=7d&view=feedin");
+    await expect(views.getByRole("link", { name: "Einspeisung" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    // Und umgekehrt: Ansicht wechseln behält den Zeitraum.
+    await views.getByRole("link", { name: "Gesamt" }).click();
+    await expect(page).toHaveURL("/dashboard/savings?range=7d");
+  });
+
+  test("Ersparnis: ungültige Werte fallen auf den Standard zurück", async ({ page }) => {
+    await page.goto("/dashboard/savings?range=toString&view=toString");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Ersparnis · Letzte 30 Tage",
+    );
+    await expect(
+      page.getByRole("navigation", { name: "Ansicht wählen" }).getByRole("link", { name: "Gesamt" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
   test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
     await page.goto("/dashboard");
 

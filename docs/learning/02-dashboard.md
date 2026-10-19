@@ -850,3 +850,68 @@ macht die Migration wiederholbar.
   × 0,08 € = 0,01 €. Die vielen Nachkommastellen zeigen, dass `numeric` exakt
   rechnet. Gerundet wird erst in der App.
 - Als `anon`: `permission denied for function daily_savings`.
+
+## Schritt 21 – Seite Ersparnis
+
+Neue Dateien: `app/dashboard/savings/` (Seite, Umschalter, Diagramm,
+Kennzahlen), `lib/readings/savings.ts` (reine Logik), `lib/data/savings.ts`
+(Datenzugriff). Die Seite ist in der Navigation unter „Ersparnis“ erreichbar.
+
+### Zwei Werte in der URL
+
+```
+/dashboard/savings?range=7d&view=feedin
+```
+
+`range` (Zeitraum) und `view` (Gesamt, Ersparnis oder Einspeisung) sind
+unabhängig voneinander. Der Fallstrick: Ein Link `?view=feedin` würde den
+Zeitraum verlieren. Deshalb baut `savingsHref(range, view)` **jeden** Link mit
+beiden Werten. Der Zeitraum-Umschalter übergibt die aktuelle Ansicht, der
+Ansicht-Umschalter den aktuellen Zeitraum. Standardwerte (`30d`, `total`)
+lässt die Funktion weg, damit die URL kurz bleibt. `URLSearchParams` kümmert
+sich um `?`, `&` und das Kodieren.
+
+Beide Werte sind Benutzereingaben. `parseRange()` und `parseView()` prüfen sie
+mit `Object.hasOwn`, Unbekanntes fällt auf den Standard zurück.
+
+### Getrennt oder gestapelt
+
+- **Gesamt:** Ersparnis und Einspeisung als gestapelte Balken. Recharts stapelt
+  alle `<Bar>` mit derselben `stackId`, die Höhe des Balkens ist die Summe.
+- **Ersparnis / Einspeisung:** nur eine Serie. Die y-Achse skaliert neu, und
+  erst so wird die Einspeisung (wenige Cent pro Tag) überhaupt sichtbar. Im
+  gestapelten Balken ist sie nur ein dünner Strich.
+
+### Runde Achsenstriche
+
+Bei Werten um 0,015 € wählte Recharts Schritte von 0,0045 €, auf Cent gerundet
+stand dort zweimal „0,01 €“. `niceTicks()` rechnet die Striche selbst: Die
+Schrittweite ist 1, 2, 2,5 oder 5 mal einer Zehnerpotenz, die Achse zeigt drei
+Nachkommastellen.
+
+### Euro formatieren
+
+`Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" })` liefert
+„3,29 €“ mit Komma und geschütztem Leerzeichen vor dem €-Zeichen. Gerundet wird
+erst hier. Die Datenbank liefert exakte `numeric`-Werte.
+
+### Tage ohne Tarif
+
+Liefert `daily_savings()` für einen Tag `null`, weil kein Tarif hinterlegt
+ist, zählt der Tag wie ein Tag ohne Messwerte. Die Seite weist dann darauf
+hin, statt still mit 0 € zu rechnen.
+
+### Getestet
+
+- `tsc`, ESLint ohne Befund. E2E 18/18 grün, neu: Zeitraum und Ansicht
+  bleiben beim Umschalten erhalten, ungültige Werte fallen auf den Standard
+  zurück.
+- Im Browser (Screenshots, Hell, Dunkel und Handybreite): 30 Tage mit echten
+  Daten ergeben 38,26 € = 38,13 € Ersparnis (136,8 kWh) + 0,13 €
+  Einspeisung (1,6 kWh). Keine Konsolenfehler.
+
+### Übung (optional)
+
+„Gesamt seit Beginn“ als vierter Zeitraum: `from` ist das `valid_from` des
+ältesten Tarifs (oder die erste Messung), `to` ist heute. Was bedeutet das für
+`bucket` bei mehreren Jahren?
