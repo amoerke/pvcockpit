@@ -136,6 +136,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Migration 0004. numeric kommt als number; date als "YYYY-MM-DD".
+      tariffs: {
+        Row: {
+          valid_from: string;
+          price_ct_per_kwh: number;
+          feed_in_ct_per_kwh: number;
+        };
+        Insert: {
+          valid_from: string;
+          price_ct_per_kwh: number;
+          feed_in_ct_per_kwh: number;
+        };
+        Update: {
+          valid_from?: string;
+          price_ct_per_kwh?: number;
+          feed_in_ct_per_kwh?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -152,6 +171,21 @@ export type Database = {
           grid_import_kwh: number;
           grid_export_kwh: number;
           measured_hours: number;
+        }[];
+      };
+      // Migration 0004. Tarif- und €-Spalten sind null, wenn für den Tag
+      // kein Tarif hinterlegt ist (LEFT JOIN). Der Generator würde hier
+      // `number` schreiben – `number | null` ist ehrlicher.
+      daily_savings: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          self_consumption_kwh: number;
+          grid_export_kwh: number;
+          price_ct_per_kwh: number | null;
+          feed_in_ct_per_kwh: number | null;
+          savings_eur: number | null;
+          feed_in_eur: number | null;
         }[];
       };
     };

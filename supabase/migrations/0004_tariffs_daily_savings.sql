@@ -139,5 +139,6 @@ notify pgrst, 'reload schema';
 -- 3) Als anon (erwartet: ERROR permission denied for function daily_savings)
 --    begin; set local role anon; select * from public.daily_savings(current_date, current_date); rollback;
 --
--- 4) Danach Typen neu erzeugen: npm run db:types (siehe scripts/gen-db-types.sh)
+-- 4) Typen: in lib/supabase/database.types.ts von Hand ergänzt (DB von außen
+--    nicht erreichbar, npm run db:types geht derzeit nicht).
 -- =============================================================================
