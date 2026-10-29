@@ -243,3 +243,36 @@ Richtung steckt im Feldnamen. Das ist dieselbe Idee wie bei `LiveReading`.
 **Getestet** per Bearer-Token über HTTP: alle fünf Tools in `tools/list`, je
 ein echter Aufruf, „302 Werte sind zu viele“ und `bucket: "week"` (lehnt das
 Schema ab).
+
+## Schritt 5 – MCP Inspector und Claude Code
+
+**Token-Skript** `scripts/mcp-token.mjs` (`npm run mcp:token`): meldet sich
+per `signInWithPassword()` an und gibt das Access-Token aus. Mit `--headers`
+kommt stattdessen `{"Authorization":"Bearer …"}`. Nutzer: `MCP_USER_*`, sonst
+der E2E-Testnutzer. Fehlermeldungen gehen nach **stderr**, damit auf
+stdout nur das Token bzw. das JSON steht.
+
+**`.mcp.json` mit `headersHelper`:** Statt ein Token fest in die
+Konfiguration zu schreiben (`--header "Authorization: Bearer eyJ…"`), nennt
+`headersHelper` einen Befehl. Claude Code führt ihn vor jedem Verbinden aus
+und nimmt dessen JSON-Ausgabe als Header. Das hat zwei Vorteile: In der
+Datei steht kein Geheimnis, sie kann also ins Repository. Und es gibt immer
+ein frisches Token, obwohl jedes nur 1 Stunde gilt.
+
+**Freigabe nötig:** Server aus einer `.mcp.json` im Projekt startet Claude
+Code erst, wenn der Nutzer sie freigegeben hat. Sonst könnte ein fremdes
+Repository über `headersHelper` beliebige Befehle ausführen.
+
+**Kompromiss:** Jeder Aufruf des Skripts legt eine neue Supabase-Session an.
+Bei ein paar Verbindungen am Tag stört das nicht. Für Dauerbetrieb käme
+OAuth in Frage (siehe „Später“).
+
+**MCP Inspector** (`npx @modelcontextprotocol/inspector`): eine Weboberfläche,
+die sich wie ein MCP-Client verbindet. Sie zeigt `tools/list` mit den
+JSON-Schemas und erlaubt, jedes Tool mit eigenen Werten aufzurufen. Damit
+sieht man, was das Modell sieht, bevor ein Modell beteiligt ist.
+
+**Ablauf beim Fragen in Claude Code:** Claude liest die Tool-Beschreibungen,
+ruft `get_current_date` auf (heute → gestern ausrechnen), dann
+`get_energy_summary` mit `from = to = gestern`, und formuliert aus dem JSON
+die Antwort. Unser Server rechnet, das Modell übersetzt in Sprache.
