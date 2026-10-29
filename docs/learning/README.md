@@ -59,8 +59,31 @@ Compose. Supabase bleibt extern.
 |---|---------|---------|
 | 1 | Dockerfile, `.dockerignore`, Compose | Multi-Stage, Standalone-Output, Build-Args für `NEXT_PUBLIC_`, Nicht-Root-Nutzer |
 
+## Meilenstein 4 – Chat mit MCP
+
+Fragen in natürlicher Sprache („Was war gestern mein Autarkiegrad?“). Ein
+MCP-Server im Cockpit stellt kuratierte Tools bereit; zuerst nutzt ihn
+Claude Code, danach ein eigener Chat im Dashboard.
+
+| # | Schritt | Konzept |
+|---|---------|---------|
+| 0 | Plan und Entscheidungen festhalten | – |
+| 1 | Tool-Logik als reine Funktionen | Eingaben prüfen mit zod, Kennzahlen nur einmal definiert |
+| 2 | MCP-Endpoint `/api/mcp` mit `get_current_date` und `get_energy_summary` | MCP-Grundbegriffe, Streamable HTTP, stateless, Route Handler |
+| 3 | Auth am Endpoint: Cookie oder Bearer-Token | RLS mit fremdem Token, Proxy-Matcher für `/api` |
+| 4 | Restliche Tools: `get_energy_by_period`, `get_savings`, `get_live_status` | Tool-Beschreibungen fürs Modell schreiben |
+| 5 | Test mit MCP Inspector und Claude Code | Token-Skript, `claude mcp add --transport http` |
+| 6 | E2E-Test des Endpoints | JSON-RPC direkt, ohne LLM |
+| 7 | Chat-Backend | Anthropic SDK, MCP-Client, eigene Tool-Schleife, Limits |
+| 8 | Chat-Seite `/dashboard/chat` | Beispielfragen, Anzeige der Tool-Aufrufe |
+| 9 | API-Key im Container | Laufzeit-Variable statt Build-Arg |
+
+Später, als eigene Schritte: Streaming, OAuth für Claude Desktop,
+gespeicherter Verlauf.
+
 ## Kapitel
 
 - [Kapitel 1 – Authentifizierung](01-auth.md)
 - [Kapitel 2 – Dashboard](02-dashboard.md)
 - [Kapitel 3 – Docker](03-docker.md)
+- [Kapitel 4 – Chat mit MCP](04-chat.md)
