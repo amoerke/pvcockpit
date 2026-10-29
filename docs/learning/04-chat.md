@@ -131,5 +131,8 @@ erwartet 401. Außerdem kennt `verifySession()` nur Cookies und reagiert mit
 `redirect()`.
 
 **Getestet** mit einem MCP-Client im selben Prozess (`InMemoryTransport`):
-`tools/list`, `get_current_date` und alle drei Fehlerfälle. Ein Aufruf mit
-echten Daten über HTTP folgt nach Schritt 3.
+`tools/list`, `get_current_date` und alle drei Fehlerfälle. Dazu kam ein
+`fetch()` aus der DevTools-Konsole im eingeloggten Browser. Das Cookie geht
+automatisch mit, also greifen der Proxy und RLS wie im Dashboard. Für den
+28.10.2026 kamen 7,3 % Autarkie heraus (1 − 20,3 / 21,9 kWh), die
+Energiebilanz geht bis auf Rundung auf.
