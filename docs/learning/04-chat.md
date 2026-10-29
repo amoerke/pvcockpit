@@ -136,3 +136,57 @@ erwartet 401. Außerdem kennt `verifySession()` nur Cookies und reagiert mit
 automatisch mit, also greifen der Proxy und RLS wie im Dashboard. Für den
 28.10.2026 kamen 7,3 % Autarkie heraus (1 − 20,3 / 21,9 kWh), die
 Energiebilanz geht bis auf Rundung auf.
+
+## Schritt 3 – Auth am Endpoint
+
+Claude Code und der MCP Inspector haben keine Browser-Cookies. Sie weisen
+sich mit `Authorization: Bearer <Access-Token>` aus. Der Endpoint muss also
+zwei Wege kennen und bei Misserfolg mit **401** antworten, nicht mit einer
+Weiterleitung auf `/login`.
+
+**Drei Stellen passten nicht dazu:**
+
+| Stelle | Problem | Lösung |
+|---|---|---|
+| Proxy | leitet ohne Cookie nach `/login` um (307) | `/api/*` wird nicht umgeleitet, der Route Handler prüft selbst |
+| `verifySession()` | kennt nur Cookies, reagiert mit `redirect()` | neues `authenticateRequest(request)` → Client oder `null` |
+| `createClient()` | baut den Client immer aus Cookies | Bearer: eigener Client mit dem Token im `Authorization`-Header |
+
+**Den Client weiterreichen statt global zu prüfen:** Die Route prüft einmal
+und gibt den Supabase-Client an `createMcpServer(supabase)` weiter. Von dort
+geht er an `getDailyEnergy(supabase, …)`. Damit gilt für `lib/assistant/`
+eine andere Regel als für `lib/data/`: Statt `verifySession()` aufzurufen,
+bekommt jede Funktion den schon geprüften Client. Die eigentliche Grenze
+bleibt **RLS**, denn PostgREST liest den Nutzer aus dem Token im Header,
+egal ob es aus einem Cookie oder einem Bearer-Header stammt.
+
+**`getUser(token)` statt nur das Token zu lesen:** Wie im Proxy fragt
+`getUser()` den Auth-Server. Nur so werden abgelaufene Tokens und Sessions,
+die nach dem Abmelden widerrufen wurden, abgelehnt. Das haben wir beim
+Playwright-Test gesehen: Nach „Abmelden“ war das alte Cookie wertlos.
+
+**Header vorhanden → nur der Header zählt:** Ist das Bearer-Token ungültig,
+kommt eine 401, auch wenn zusätzlich ein gültiges Cookie mitgeschickt wird.
+Sonst würde ein Fehler im Client unbemerkt bleiben.
+
+**`WWW-Authenticate: Bearer`** gehört laut HTTP und MCP-Spezifikation zu jeder
+401. Er sagt dem Client, welche Art von Ausweis erwartet wird. Später kann
+dort auch stehen, wo es per OAuth einen Ausweis gibt.
+
+**Und CSRF?** Die Cookie-Variante ist nicht über fremde Websites ausnutzbar:
+Die Supabase-Cookies sind `SameSite=Lax`, ein POST von einer fremden Seite
+schickt sie also nicht mit. Außerdem löst `Content-Type: application/json`
+eine CORS-Preflight-Anfrage aus, die wir nicht erlauben.
+
+**Getestet** mit einem Node-Skript gegen den Dev-Server. Das Token stammt aus
+`e2e/.auth/user.json` und wird nie ausgegeben:
+
+| Fall | Status |
+|---|---|
+| ohne Ausweis | 401 |
+| `Bearer quatsch` | 401 |
+| `Basic abc` | 401 |
+| gültiges Bearer-Token | 200 |
+| gültiges Cookie | 200 |
+| `Bearer quatsch` + gültiges Cookie | 401 |
+| Seite `/dashboard` ohne Login | 307 → `/login` (unverändert) |

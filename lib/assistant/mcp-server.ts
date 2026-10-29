@@ -4,17 +4,22 @@
  *
  * Pro Request ein NEUER Server (stateless): Er lebt nur für eine Anfrage
  * und teilt nichts mit anderen Nutzern – wie der Supabase-Client.
+ *
+ * Der Server bekommt den geprüften Client des Aufrufers (authenticateRequest())
+ * und reicht ihn an die Tools weiter. So fragt jedes Tool als genau dieser
+ * Nutzer ab.
  */
 import "server-only";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
+import type { AuthenticatedClient } from "@/lib/assistant/auth";
+import { getDailyEnergy } from "@/lib/assistant/data";
 import { checkRange, DaySchema, toEnergySummary } from "@/lib/assistant/energy-summary";
-import { getDailyEnergy } from "@/lib/data/readings";
 import { berlinDay, TIME_ZONE } from "@/lib/time";
 
-export function createMcpServer(): McpServer {
+export function createMcpServer(supabase: AuthenticatedClient): McpServer {
   const server = new McpServer({ name: "amperesolarcockpit", version: "0.1.0" });
 
   server.registerTool(
@@ -57,7 +62,7 @@ export function createMcpServer(): McpServer {
       const problem = checkRange(from, to, berlinDay(Date.now()));
       if (problem) return toolError(problem);
 
-      const rows = await getDailyEnergy(from, to);
+      const rows = await getDailyEnergy(supabase, from, to);
       return json(toEnergySummary(rows, from, to));
     },
   );

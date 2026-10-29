@@ -7,14 +7,28 @@
  * DELETE (Session beenden) gibt es ohne Session nicht. Für Methoden ohne
  * Export antwortet Next.js selbst mit 405 Method Not Allowed.
  *
+ * Auth: Bearer-Token oder Session-Cookie (lib/assistant/auth.ts). Ohne
+ * gültigen Ausweis 401 – der Proxy leitet /api/* bewusst nicht nach /login um.
+ *
  * Doku: node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md
  */
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
+import { authenticateRequest } from "@/lib/assistant/auth";
 import { createMcpServer } from "@/lib/assistant/mcp-server";
 
 export async function POST(request: Request): Promise<Response> {
-  const server = createMcpServer();
+  const supabase = await authenticateRequest(request);
+  if (!supabase) {
+    // WWW-Authenticate sagt dem Client, WELCHE Art Ausweis erwartet wird.
+    // Die MCP-Spezifikation verlangt den Header bei 401.
+    return Response.json(
+      { error: "Nicht angemeldet: Session-Cookie oder Authorization: Bearer <Token> erforderlich." },
+      { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="amperesolarcockpit"' } },
+    );
+  }
+
+  const server = createMcpServer(supabase);
   const transport = new WebStandardStreamableHTTPServerTransport({
     // undefined = stateless: keine Session-Verwaltung.
     sessionIdGenerator: undefined,

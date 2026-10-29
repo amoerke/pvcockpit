@@ -26,6 +26,12 @@ const PUBLIC_PATHS = ["/login", "/auth"];
 /** Wohin eingeloggte Nutzer geschickt werden, die /login aufrufen. */
 const HOME_PATH = "/dashboard";
 
+/**
+ * API-Endpunkte prüfen selbst und antworten mit 401. Eine Weiterleitung auf
+ * die Login-SEITE hilft einem Programm (Claude Code, Skript) nicht weiter.
+ */
+const API_PREFIX = "/api/";
+
 function isPublicPath(pathname: string) {
   // "/auth" soll auch "/auth/confirm" erlauben, aber nicht "/authxyz".
   return PUBLIC_PATHS.some(
@@ -93,7 +99,10 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Fall 1: Nicht eingeloggt und geschützte Seite → zum Login.
-  if (!user && !isPublicPath(pathname)) {
+  // Nicht für /api/*: Die Route Handler prüfen selbst (Cookie ODER
+  // Bearer-Token) und antworten mit 401. Erneuerte Cookies gibt der Proxy
+  // aber auch dort weiter (Fall 3).
+  if (!user && !isPublicPath(pathname) && !pathname.startsWith(API_PREFIX)) {
     return redirectWithCookies(request, response, "/login");
   }
 

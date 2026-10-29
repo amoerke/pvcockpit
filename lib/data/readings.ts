@@ -27,7 +27,6 @@ import {
   sumEnergy,
   toPeriodBars,
   type Bucket,
-  type DailyEnergyRow,
   type PeriodBar,
   type Range,
 } from "@/lib/readings/period";
@@ -222,23 +221,4 @@ export async function getPeriodHistory(range: Range): Promise<PeriodHistory> {
     daysWithData: data.length,
     dayCount: countDays(from, to),
   };
-}
-
-/**
- * Tageszeilen aus daily_energy() für einen beliebigen Zeitraum – für die
- * Tools des Assistenten. Den Zeitraum prüft der Aufrufer (checkRange()),
- * hier wird nur abgefragt.
- */
-export async function getDailyEnergy(from: DayString, to: DayString): Promise<DailyEnergyRow[]> {
-  await verifySession();
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("daily_energy", { p_from: from, p_to: to });
-
-  if (error) {
-    console.error("[getDailyEnergy]", error.code, error.message);
-    throw new Error("Messwerte konnten nicht geladen werden.");
-  }
-
-  return data;
 }
