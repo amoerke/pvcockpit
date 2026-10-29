@@ -190,3 +190,56 @@ eine CORS-Preflight-Anfrage aus, die wir nicht erlauben.
 | gültiges Cookie | 200 |
 | `Bearer quatsch` + gültiges Cookie | 401 |
 | Seite `/dashboard` ohne Login | 307 → `/login` (unverändert) |
+
+## Schritt 4 – Restliche Tools
+
+| Tool | Parameter | Quelle | Reine Funktion |
+|---|---|---|---|
+| `get_energy_by_period` | `from`, `to`, `bucket` | `daily_energy()` | `toEnergyByPeriod()` in `energy.ts` |
+| `get_savings` | `from`, `to` | `savings_by_period()` | `toSavingsSummary()` in `savings.ts` |
+| `get_live_status` | – | neueste Zeile, `LIVE_COLUMNS` | `toLiveStatus()` in `live.ts` |
+
+`energy-summary.ts` heißt jetzt `energy.ts`. Summary und Buckets nutzen
+dieselbe Funktion `toFigures()`, rechnen und runden also garantiert gleich.
+`round()` liegt in einer eigenen Datei, weil alle drei Module es brauchen.
+
+**Tool-Beschreibungen schreiben:** Das Modell sieht von einem Tool nur Name,
+Beschreibung und Parameter-Schema. Daraus muss es ablesen:
+
+- **Wann** es das Tool nimmt und wann ein anderes: „für Vergleiche
+  stattdessen `get_energy_by_period`“, „für Fragen zu ‚jetzt‘“.
+- **Was** die Felder bedeuten, vor allem Fachbegriffe: `savings_eur` sind
+  gesparte Stromkosten, nicht der Ertrag.
+- **Wie** es Sonderfälle deutet: `null` heißt „keine Messwerte“, und
+  `days_without_tariff > 0` heißt, dass Euro fehlen.
+- **Worauf** es hinweisen soll: `age_minutes` über etwa 10 Minuten bedeutet,
+  dass der Logger hängt.
+
+Faustregel: Schreib die Beschreibung so, als läse sie ein neuer Kollege, der
+die App nie gesehen hat und nicht nachfragen kann.
+
+**`data_since` in `get_current_date`:** Bei „Wie viel habe ich insgesamt
+gespart?“ müsste das Modell sonst raten, wo „insgesamt“ beginnt. Ein
+Stolperstein beim Test: Die älteste Zeile in `solar_readings` stammt vom
+15.09., `daily_energy()` zählt aber nur Zeilen **mit** `sys_*`-Werten (ab
+06.10.). `data_since` muss dieselbe Bedingung nutzen, sonst gäbe es für
+„insgesamt“ wochenlang `null`. Eine Kennzahl, zwei Abfragen: Beide müssen
+dieselbe Definition von „Daten vorhanden“ haben.
+
+**Token-Budget:** `get_energy_by_period` liefert höchstens 100 Einträge. Ein
+Eintrag kostet etwa 100 Tokens, 302 Tageswerte für ein Jahr wären teuer und
+unübersichtlich. Die Fehlermeldung nennt gleich die Lösung („Gröberen bucket
+wählen“), damit das Modell den Aufruf selbst korrigieren kann.
+
+**Lücken zeigen:** Buckets ohne Daten erscheinen mit `days_with_data: 0` und
+`null`-Werten (wie `toPeriodBars()`). Fehlte der Eintrag, könnte das Modell
+annehmen, es habe ihn übersehen.
+
+**`get_live_status`:** Die Zeit kommt als Berliner Ortszeit
+(`"2026-10-29 20:29"`) statt als UTC-ISO-String, damit das Modell nicht
+umrechnen muss und sich dabei vertut. Leistungen sind immer ≥ 0, die
+Richtung steckt im Feldnamen. Das ist dieselbe Idee wie bei `LiveReading`.
+
+**Getestet** per Bearer-Token über HTTP: alle fünf Tools in `tools/list`, je
+ein echter Aufruf, „302 Werte sind zu viele“ und `bucket: "week"` (lehnt das
+Schema ab).
