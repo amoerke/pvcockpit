@@ -17,8 +17,12 @@ import type { DayString } from "@/lib/time";
  */
 export const DaySchema = z.iso.date().describe("Kalendertag in Europe/Berlin, Format YYYY-MM-DD");
 
-/** Längster erlaubter Zeitraum – schützt vor versehentlich riesigen Abfragen. */
-const MAX_DAYS = 3660;
+/**
+ * Längster erlaubter Zeitraum. daily_energy() liefert eine Zeile je Tag, und
+ * PostgREST gibt höchstens 1.000 Zeilen zurück – darüber würden Tage still
+ * fehlen. Lieber eine klare Fehlermeldung ans Modell.
+ */
+const MAX_DAYS = 1000;
 
 /**
  * Prüft einen Zeitraum, den das Modell angefragt hat.

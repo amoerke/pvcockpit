@@ -52,7 +52,7 @@ den Aufruf korrigieren.
   Tag gibt. Die `.describe()`-Texte landen später im JSON-Schema des Tools,
   also bei dem, was das Modell über das Tool liest.
 - `checkRange()` prüft Regeln **über mehrere Felder**: `from ≤ to`, nichts in
-  der Zukunft, höchstens 3660 Tage. MCP beschreibt Parameter als einzelne
+  der Zukunft, höchstens 1000 Tage. MCP beschreibt Parameter als einzelne
   Felder, solche Regeln passen dort nicht hinein.
 
 **Die Antwort ist für ein Modell, nicht für einen Menschen:**
@@ -67,3 +67,69 @@ den Aufruf korrigieren.
 
 Der Autarkiegrad kommt aus `sumEnergy()` und `toRatios()`. Das ist dieselbe
 Formel wie in der Kachel auf dem Dashboard, sie ist also genau einmal definiert.
+
+**Nachtrag aus Schritt 2:** Die Grenze liegt bei 1000 statt 3660 Tagen.
+`daily_energy()` liefert eine Zeile je Tag, und PostgREST gibt höchstens
+1.000 Zeilen zurück. Bei längeren Zeiträumen würden Tage **still** fehlen.
+
+## Schritt 2 – MCP-Endpoint `/api/mcp`
+
+**MCP in drei Begriffen:**
+
+- **Server:** bietet Fähigkeiten an. Bei uns sind das nur *Tools*. MCP kennt
+  außerdem *Resources* (Daten zum Lesen) und *Prompts* (Vorlagen).
+- **Client:** spricht mit dem Server, zum Beispiel Claude Code, der MCP
+  Inspector oder später unser Chat-Backend. Das Modell selbst ruft nichts auf,
+  es *bittet* den Client darum.
+- **Protokoll:** JSON-RPC 2.0. Ein Client schickt `initialize`, dann
+  `tools/list` (welche Tools gibt es?) und `tools/call` (Tool ausführen).
+
+**Aufteilung im Code:**
+
+| Datei | Aufgabe |
+|---|---|
+| `lib/assistant/energy-summary.ts` | Prüfen und Rechnen (Schritt 1), ohne MCP |
+| `lib/assistant/mcp-server.ts` | `createMcpServer()`: Tools mit Beschreibung und Schema registrieren |
+| `app/api/mcp/route.ts` | HTTP: Request an den Transport geben, Antwort zurück |
+| `lib/data/readings.ts` | `getDailyEnergy(from, to)`: `verifySession()` und `rpc("daily_energy")` |
+
+**Streamable HTTP, stateless:** Der Client schickt jede Nachricht als POST.
+Mit `sessionIdGenerator: undefined` gibt es keine Session. Pro Request
+entstehen ein neuer `McpServer` und ein neuer Transport, beide sind danach
+weg. Darum genügt ein `POST`-Export. GET (Server-Push per SSE) und DELETE
+(Session beenden) setzen eine Session voraus, für sie antwortet Next.js
+selbst mit 405. `enableJsonResponse: true` liefert eine normale JSON-Antwort
+statt eines SSE-Streams, weil unsere Tools in einem Stück antworten.
+
+Der Transport heißt `WebStandardStreamableHTTPServerTransport`: Er nimmt einen
+Web-`Request` und gibt eine `Response` zurück. Genau mit diesen Typen arbeiten
+Route Handler. Die Variante ohne „WebStandard“ ist für Node/Express gebaut.
+
+**Schema → JSON-Schema:** `inputSchema: { from: DaySchema, to: DaySchema }`
+ist ein „raw shape“. Das SDK macht daraus das JSON-Schema, das in
+`tools/list` steht, und prüft damit jeden Aufruf. Der Code im Tool bekommt
+`from`/`to` also schon geprüft. `z.iso.date()` erzeugt dabei ein langes
+Regex-`pattern`, das bei jedem `tools/list` Tokens kostet. Das ist der Preis
+dafür, dass auch 2026-02-30 abgelehnt wird.
+
+**Zwei Arten von Fehlern:**
+
+| Fehler | Beispiel | Antwort |
+|---|---|---|
+| Schema verletzt | `from: "2026-02-30"` | SDK: `Input validation error …` |
+| Regel verletzt | `from` nach `to` | unser Text aus `checkRange()` |
+
+Beide kommen als Tool-Ergebnis mit `isError: true` zurück, nicht als
+Protokollfehler. Das Modell liest den Text und kann den Aufruf korrigieren.
+
+**`readOnlyHint: true`:** sagt Clients, dass das Tool nichts verändert. Claude
+Code und andere Clients dürfen es dann ohne Rückfrage ausführen.
+
+**Noch offen (Schritt 3):** Ohne Login leitet der Proxy `/api/mcp` nach
+`/login` um (307). Für einen API-Client ist das die falsche Antwort, er
+erwartet 401. Außerdem kennt `verifySession()` nur Cookies und reagiert mit
+`redirect()`.
+
+**Getestet** mit einem MCP-Client im selben Prozess (`InMemoryTransport`):
+`tools/list`, `get_current_date` und alle drei Fehlerfälle. Ein Aufruf mit
+echten Daten über HTTP folgt nach Schritt 3.
