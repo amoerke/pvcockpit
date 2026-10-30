@@ -52,3 +52,4 @@ next-env.d.ts
 
 # Supabase CLI (lokaler Zwischenstand)
 /supabase/.temp/
+.mcp.json
