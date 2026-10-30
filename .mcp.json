@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "cockpit": {
+    "ampere-cockpit": {
       "type": "http",
       "url": "http://localhost:3000/api/mcp",
       "headersHelper": "node --env-file=.env.local scripts/mcp-token.mjs --headers"
