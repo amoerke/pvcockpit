@@ -25,6 +25,7 @@ export const config = {
      * - _next/static  (gebündeltes JS/CSS)
      * - _next/image   (Bildoptimierung)
      * - favicon.ico
+     * - .well-known   (öffentliche Metadaten, z. B. für OAuth-Discovery)
      * - statische Dateien mit Bild-Endungen (aus /public)
      *
      * Die Klammer mit `?!` ist ein "negativer Lookahead" in einer Regex:
@@ -32,6 +33,6 @@ export const config = {
      * Für diese Dateien braucht es keine Session – das spart unnötige
      * Aufrufe beim Auth-Server.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -94,6 +94,31 @@ test.describe("Auth", () => {
   });
 });
 
+// OAuth-Discovery: Ein Client ohne Token folgt dem Hinweis aus dem 401.
+test.describe("Discovery", () => {
+  test("401 nennt die Metadaten, die auf Supabase Auth zeigen", async ({ request }) => {
+    const response = await post(request, "tools/list", {}, {});
+    const header = response.headers()["www-authenticate"];
+    const metadataUrl = /resource_metadata="([^"]+)"/.exec(header)?.[1];
+    expect(metadataUrl).toMatch(/\/\.well-known\/oauth-protected-resource\/api\/mcp$/);
+
+    // Ohne Login lesbar – keine Weiterleitung nach /login.
+    const metadata = await request.get(metadataUrl!, { maxRedirects: 0 });
+    expect(metadata.status()).toBe(200);
+    expect(metadata.headers()["access-control-allow-origin"]).toBe("*");
+
+    const body = await metadata.json();
+    expect(body.resource).toMatch(/\/api\/mcp$/);
+    expect(body.authorization_servers).toEqual([`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`]);
+  });
+
+  test("Metadaten auch ohne Pfad", async ({ request }) => {
+    const response = await request.get("/.well-known/oauth-protected-resource", { maxRedirects: 0 });
+    expect(response.status()).toBe(200);
+    expect((await response.json()).resource).toMatch(/\/api\/mcp$/);
+  });
+});
+
 test.describe("Protokoll", () => {
   test("initialize nennt Server und Fähigkeit tools", async ({ request }) => {
     const response = await post(request, "initialize", {

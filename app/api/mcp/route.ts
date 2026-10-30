@@ -16,15 +16,17 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 import { authenticateRequest } from "@/lib/assistant/auth";
 import { createMcpServer } from "@/lib/assistant/mcp-server";
+import { wwwAuthenticate } from "@/lib/assistant/oauth";
 
 export async function POST(request: Request): Promise<Response> {
   const supabase = await authenticateRequest(request);
   if (!supabase) {
-    // WWW-Authenticate sagt dem Client, WELCHE Art Ausweis erwartet wird.
+    // WWW-Authenticate sagt dem Client, WELCHE Art Ausweis erwartet wird –
+    // und mit resource_metadata, WO er per OAuth einen bekommt.
     // Die MCP-Spezifikation verlangt den Header bei 401.
     return Response.json(
       { error: "Nicht angemeldet: Session-Cookie oder Authorization: Bearer <Token> erforderlich." },
-      { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="amperesolarcockpit"' } },
+      { status: 401, headers: { "WWW-Authenticate": wwwAuthenticate(request) } },
     );
   }
 

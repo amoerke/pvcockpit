@@ -19,6 +19,9 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      # Öffentliche Adresse für die OAuth-Metadaten. Pflicht hinter einem
+      # Reverse-Proxy: Sonst sieht die App nur http://0.0.0.0:3000.
+      APP_URL: ${APP_URL:-}
     ports:
       - "3000:3000"
     restart: unless-stopped
