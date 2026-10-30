@@ -90,7 +90,7 @@ landet als `iss` in jedem neuen Token.
 | 0 | Plan und Entscheidungen festhalten | – |
 | 1 | `/.well-known/oauth-protected-resource` und `resource_metadata` im 401 | Discovery (RFC 9728), Route Handler unter `.well-known` |
 | 2 | Zustimmungsseite `/oauth/consent` mit Entscheidung | Autorisierungsablauf, Rücksprung nach dem Login, Server Action |
-| 3 | Tokens prüfen: Audience und `client_id` | Warum ein Token für **diesen** Dienst ausgestellt sein muss (RFC 8707) |
+| 3 | Herkunft der Tokens: `client_id`, Log je Aufruf | Audience (RFC 8707) und warum Supabase sie nicht setzt |
 | 4 | Supabase auf dem VPS fertig einrichten, App deployen | `issuer`, Authorization-Pfad, dynamische Registrierung |
 | 5 | Testen: MCP Inspector, Claude Code (`/mcp`), claude.ai | Ablauf aus Sicht des Clients |
 | 6 | Freigaben anzeigen und widerrufen | Grants, `client_id` in der Session |
@@ -253,3 +253,68 @@ nach `npx next typegen` (läuft sonst bei `next dev`/`next build` mit).
 Noch nicht getestet: die Seite mit einer echten Anfrage. Eine
 `authorization_id` entsteht nur im echten Ablauf, und Supabase leitet dafür
 auf `pv.dataminer.cloud` weiter (Schritt 5).
+
+## Schritt 3 – Herkunft der Tokens
+
+**Geplant war eine Audience-Prüfung.** Nach RFC 8707 schickt der Client beim
+Login `resource=https://pv.dataminer.cloud/api/mcp` mit. Der Auth-Server
+schreibt das als `aud` ins Token, und `/api/mcp` nimmt nur Tokens an, die
+**für sich** ausgestellt sind. So kann ein Dienst, dem man ein Token für
+sich selbst gegeben hat, es nicht bei einem anderen Dienst einsetzen.
+
+**Was Supabase Auth tatsächlich tut** (laut Quellcode):
+
+- `resource` wird angenommen, geprüft (absolute URI, ohne Query und
+  Fragment) und mit der Autorisierung gespeichert.
+- Beim Token-Tausch muss ein mitgeschicktes `resource` dazu passen.
+- **Ins Token kommt es nicht.** `aud` ist immer `"authenticated"`, wie bei
+  jedem Login.
+
+**Warum wir es dabei belassen (Entscheidung):** Bei uns brächte eine
+Audience-Prüfung wenig. Jedes Supabase-Token des Nutzers funktioniert
+ohnehin auch **direkt** an der Supabase-REST-API. Lehnte `/api/mcp` es ab,
+könnte ein gestohlenes Token trotzdem genauso viel. Die eigentliche Grenze
+ist RLS: nur lesen, nur die eigenen Daten. Gegen gestohlene Tokens helfen
+die kurze Laufzeit (1 Stunde) und das Widerrufen von Freigaben (Schritt 6).
+Ein Custom Access Token Hook könnte `aud` setzen. Das könnte aber Supabase
+selbst stören (`getUser()`, PostgREST) und stünde in keinem Verhältnis zum
+Nutzen.
+
+**Stattdessen: wissen, wer anruft.** `authenticateRequest()` liefert jetzt
+einen `Caller`:
+
+| `via` | Woran erkannt | Beispiel |
+|---|---|---|
+| `cookie` | kein `Authorization`-Header, gültiges Session-Cookie | Chat-Seite |
+| `token` | Bearer-Token **ohne** `client_id` | `scripts/mcp-token.mjs` |
+| `oauth` | Bearer-Token **mit** `client_id` | Claude nach dem OAuth-Login |
+
+`/api/mcp` schreibt pro JSON-RPC-Nachricht eine Zeile ins Server-Log:
+
+```
+[mcp] via=token client=- tools/call get_live_status
+[mcp] via=oauth client=9a8b7c6d-… tools/call get_savings
+```
+
+Nur Weg, Client, Methode und Tool. Parameter und Ergebnisse bleiben draußen,
+die gehen das Log nichts an.
+
+**Claims erst nach der Prüfung lesen:** `client_id` steht im Payload des
+JWT. Den kann jeder dekodieren, er ist nur Base64. Lesbar heißt aber nicht
+echt: Ohne Signaturprüfung könnte jemand ein Token mit erfundener
+`client_id` basteln. Darum liest `claimString()` das Feld **erst nachdem**
+`getUser()` beim Auth-Server bestätigt hat, dass das Token echt ist.
+
+**Ein Body, zwei Leser:** Das Log braucht die JSON-RPC-Methode, der
+MCP-Transport braucht danach denselben Body. Ein `Request`-Body lässt sich
+nur einmal lesen, daher `request.clone().json()` für das Log.
+
+**Getestet** gegen den Dev-Server:
+
+| Fall | Ergebnis |
+|---|---|
+| Token aus dem Skript, `tools/call get_live_status` | 200, Log `via=token client=-` |
+| dasselbe Token mit nachträglich eingefügter `client_id` (Signatur passt nicht mehr) | 401 |
+| E2E-Projekt `api` | 15 grün |
+
+Ein echtes OAuth-Token (`via=oauth`) gibt es erst in Schritt 5.

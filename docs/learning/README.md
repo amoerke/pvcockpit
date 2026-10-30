@@ -92,7 +92,7 @@ Zustimmungsseite.
 | 0 | Plan, Entscheidungen, Supabase-Update auf v2.186.0 | – |
 | 1 | `/.well-known/oauth-protected-resource`, `resource_metadata` im 401 | Discovery (RFC 9728) |
 | 2 | Zustimmungsseite `/oauth/consent` | Autorisierungsablauf, Server Action |
-| 3 | Tokens prüfen: Audience und `client_id` | Resource Indicators (RFC 8707) |
+| 3 | Herkunft der Tokens: `client_id`, Log je Aufruf | Resource Indicators (RFC 8707) und ihre Grenzen bei Supabase |
 | 4 | Supabase auf dem VPS fertig einrichten, App deployen | `issuer`, dynamische Registrierung |
 | 5 | Test mit MCP Inspector, Claude Code, claude.ai | Ablauf aus Sicht des Clients |
 | 6 | Freigaben anzeigen und widerrufen | Grants |

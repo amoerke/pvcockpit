@@ -14,13 +14,13 @@
  */
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
-import { authenticateRequest } from "@/lib/assistant/auth";
+import { authenticateRequest, type Caller } from "@/lib/assistant/auth";
 import { createMcpServer } from "@/lib/assistant/mcp-server";
 import { wwwAuthenticate } from "@/lib/assistant/oauth";
 
 export async function POST(request: Request): Promise<Response> {
-  const supabase = await authenticateRequest(request);
-  if (!supabase) {
+  const caller = await authenticateRequest(request);
+  if (!caller) {
     // WWW-Authenticate sagt dem Client, WELCHE Art Ausweis erwartet wird –
     // und mit resource_metadata, WO er per OAuth einen bekommt.
     // Die MCP-Spezifikation verlangt den Header bei 401.
@@ -30,7 +30,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const server = createMcpServer(supabase);
+  await logCall(request, caller);
+
+  const server = createMcpServer(caller.supabase);
   const transport = new WebStandardStreamableHTTPServerTransport({
     // undefined = stateless: keine Session-Verwaltung.
     sessionIdGenerator: undefined,
@@ -45,5 +47,23 @@ export async function POST(request: Request): Promise<Response> {
   } finally {
     // Die Antwort ist fertig – Server und Transport werden nicht mehr gebraucht.
     await server.close();
+  }
+}
+
+/**
+ * Eine Zeile pro Aufruf im Server-Log: wer (Weg + OAuth-Client) was
+ * (JSON-RPC-Methode, Tool). So lässt sich später nachvollziehen, welcher
+ * Client welche Daten gelesen hat. Keine Parameter, keine Ergebnisse.
+ */
+async function logCall(request: Request, caller: Caller) {
+  // clone(): Der Body lässt sich nur einmal lesen, der Transport braucht ihn noch.
+  const body: unknown = await request.clone().json().catch(() => null);
+  const messages = Array.isArray(body) ? body : [body];
+  for (const message of messages) {
+    const method = typeof message?.method === "string" ? message.method : "?";
+    const tool = method === "tools/call" ? message?.params?.name : undefined;
+    // Eine Zeile als Text (kein Objekt): Node bricht Objekte sonst über
+    // mehrere Zeilen um, und grep findet nur den Anfang.
+    console.info(`[mcp] via=${caller.via} client=${caller.clientId ?? "-"} ${method}${tool ? ` ${tool}` : ""}`);
   }
 }

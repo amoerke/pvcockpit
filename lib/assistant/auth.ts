@@ -22,10 +22,23 @@ import { createClient as createCookieClient } from "@/lib/supabase/server";
 export type AuthenticatedClient = SupabaseClient<Database>;
 
 /**
- * Prüft den Request und liefert einen Client im Namen des Nutzers –
+ * Wer ruft an, und wie hat er sich ausgewiesen?
+ * - "cookie": eingeloggter Browser (Chat-Seite)
+ * - "token":  Bearer-Token aus einem normalen Login (scripts/mcp-token.mjs)
+ * - "oauth":  Bearer-Token, das ein OAuth-Client bekommen hat (Claude …).
+ *             `clientId` nennt den Client, wie Supabase ihn registriert hat.
+ */
+export type Caller = {
+  supabase: AuthenticatedClient;
+  via: "cookie" | "token" | "oauth";
+  clientId: string | null;
+};
+
+/**
+ * Prüft den Request und liefert den Aufrufer samt Client in seinem Namen –
  * oder `null`, wenn sich niemand (gültig) ausgewiesen hat.
  */
-export async function authenticateRequest(request: Request): Promise<AuthenticatedClient | null> {
+export async function authenticateRequest(request: Request): Promise<Caller | null> {
   const header = request.headers.get("authorization");
 
   // Header vorhanden → NUR er zählt. Kein Rückfall aufs Cookie: Wer ein
@@ -34,16 +47,16 @@ export async function authenticateRequest(request: Request): Promise<Authenticat
   if (header !== null) {
     const token = /^Bearer (\S+)$/i.exec(header)?.[1];
     if (!token) return null;
-    return bearerClient(token);
+    return bearerCaller(token);
   }
 
   // Cookie-Weg: Der Proxy hat ein abgelaufenes Token schon erneuert.
   const supabase = await createCookieClient();
   const { data } = await supabase.auth.getUser();
-  return data.user ? supabase : null;
+  return data.user ? { supabase, via: "cookie", clientId: null } : null;
 }
 
-async function bearerClient(token: string): Promise<AuthenticatedClient | null> {
+async function bearerCaller(token: string): Promise<Caller | null> {
   const supabase = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
     // Jede Abfrage schickt das Token mit → PostgREST setzt auth.uid() und
     // wendet RLS an, genau wie beim Cookie-Client.
@@ -57,5 +70,23 @@ async function bearerClient(token: string): Promise<AuthenticatedClient | null> 
   // „richtig aussieht“, reicht nicht – erst recht nicht ein abgelaufenes
   // oder eines, dessen Session per Abmelden widerrufen wurde.
   const { data } = await supabase.auth.getUser(token);
-  return data.user ? supabase : null;
+  if (!data.user) return null;
+
+  const clientId = claimString(token, "client_id");
+  return { supabase, via: clientId ? "oauth" : "token", clientId };
+}
+
+/**
+ * Liest ein Feld aus dem Payload eines JWT, OHNE die Signatur zu prüfen.
+ * Darf deshalb nur NACH getUser() benutzt werden: Erst dann steht fest,
+ * dass das Token echt ist und das Feld nicht erfunden wurde.
+ */
+function claimString(token: string, name: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+    const value = payload?.[name];
+    return typeof value === "string" && value ? value : null;
+  } catch {
+    return null;
+  }
 }

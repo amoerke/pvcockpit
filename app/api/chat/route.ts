@@ -32,8 +32,8 @@ const BodySchema = z.object({
 });
 
 export async function POST(request: Request): Promise<Response> {
-  const supabase = await authenticateRequest(request);
-  if (!supabase) {
+  const caller = await authenticateRequest(request);
+  if (!caller) {
     return Response.json(
       { error: "Nicht angemeldet." },
       { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="amperesolarcockpit"' } },
@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    return Response.json(await runChat(supabase, history));
+    return Response.json(await runChat(caller.supabase, history));
   } catch (error) {
     // Typisierte Fehler des SDK: Überlastung/Limits sind vorübergehend,
     // alles andere ist ein Fehler bei uns oder bei der API.
