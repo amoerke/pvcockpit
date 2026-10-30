@@ -61,6 +61,12 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
     },
+    // 4. API-Tests (z. B. /api/mcp): nur HTTP, kein Browser. Sie melden sich
+    //    selbst per Bearer-Token an und brauchen das Setup daher nicht.
+    {
+      name: "api",
+      testMatch: /.*\.api\.spec\.ts/,
+    },
   ],
 
   // Playwright startet den Dev-Server selbst – oder nutzt einen, der schon

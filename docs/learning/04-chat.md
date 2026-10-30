@@ -276,3 +276,48 @@ sieht man, was das Modell sieht, bevor ein Modell beteiligt ist.
 ruft `get_current_date` auf (heute → gestern ausrechnen), dann
 `get_energy_summary` mit `from = to = gestern`, und formuliert aus dem JSON
 die Antwort. Unser Server rechnet, das Modell übersetzt in Sprache.
+
+## Schritt 6 – E2E-Test des Endpoints
+
+`e2e/mcp.api.spec.ts` prüft `/api/mcp` so, wie ein MCP-Client ihn nutzt:
+JSON-RPC über HTTP, mit Bearer-Token und ohne Modell. Die Tests sind
+deterministisch und kosten keine API-Tokens.
+
+**Ohne Browser:** Statt `page` nutzen die Tests die Fixture `request`
+(`APIRequestContext`). Sie schickt reine HTTP-Anfragen, die `baseURL` kommt
+aus der Config. Ein eigenes Projekt `api` in `playwright.config.ts` startet
+keinen Chrome und hängt nicht vom Setup ab.
+
+**Bearer statt Cookie:** `beforeAll` meldet sich per `signInWithPassword()` an,
+wie `scripts/mcp-token.mjs`. Getestet wird also der Weg von Claude Code. Der
+Cookie-Weg ist mit Schritt 3 abgedeckt.
+
+**`signOut({ scope: "local" })` im `afterAll`:** Der Standard `"global"` würde
+**alle** Sessions des Testnutzers widerrufen, also auch die aus
+`auth.setup.ts`. Parallel laufende Browser-Tests landeten dann plötzlich auf
+`/login`. Mit `fullyParallel` läuft `beforeAll` übrigens einmal **pro
+Worker**, nicht einmal pro Datei.
+
+**Was geprüft wird:**
+
+| Gruppe | Fälle |
+|---|---|
+| Auth | ohne Ausweis 401 + `WWW-Authenticate`, ungültiges Token 401, GET 405 |
+| Protokoll | `initialize` (Servername, Fähigkeit `tools`), `tools/list` (fünf Tools, alle `readOnlyHint`) |
+| Tools | je ein echter Aufruf, an einem festen Tag in der Vergangenheit |
+| Fehler fürs Modell | Schema (`2026-02-30`), `from` nach `to`, zu viele Buckets |
+
+**Was ein JSON-RPC-Test zeigt:** Ein Tool-Fehler ist **kein** JSON-RPC-`error`.
+Er ist ein normales `result` mit `isError: true`. Der Helfer `callTool()` prüft
+deshalb beides: `body.error` fehlt, `result.isError` ist gesetzt.
+
+**`Accept`-Header:** Bei Streamable HTTP muss der Client
+`application/json, text/event-stream` annehmen, auch wenn unser Server nur
+JSON schickt. Fehlt das, antwortet das SDK mit 406.
+
+**Bewusst grobe Erwartungen:** Die Tests prüfen Struktur und Bereiche
+(Autarkie zwischen 0 und 100 %), keine exakten kWh. Die Formeln testen die
+reinen Funktionen. Hier geht es darum, dass die Teile zusammenspielen: Auth,
+Transport, Schema, Datenbank.
+
+Ausführen: `npx playwright test --project=api`
