@@ -78,8 +78,24 @@ Claude Code, danach ein eigener Chat im Dashboard.
 | 8 | Chat-Seite `/dashboard/chat` | Beispielfragen, Anzeige der Tool-Aufrufe |
 | 9 | API-Key im Container | Laufzeit-Variable statt Build-Arg |
 
-Später, als eigene Schritte: Streaming, OAuth für Claude Desktop,
-gespeicherter Verlauf.
+Später, als eigene Schritte: Streaming, gespeicherter Verlauf. OAuth ist
+Meilenstein 5.
+
+## Meilenstein 5 – OAuth für MCP
+
+Claude Desktop, claude.ai und Claude Code melden sich per OAuth an statt mit
+dem Token-Skript. Supabase Auth stellt die Tokens aus, die App liefert die
+Zustimmungsseite.
+
+| # | Schritt | Konzept |
+|---|---------|---------|
+| 0 | Plan, Entscheidungen, Supabase-Update auf v2.186.0 | – |
+| 1 | `/.well-known/oauth-protected-resource`, `resource_metadata` im 401 | Discovery (RFC 9728) |
+| 2 | Zustimmungsseite `/oauth/consent` | Autorisierungsablauf, Server Action |
+| 3 | Tokens prüfen: Audience und `client_id` | Resource Indicators (RFC 8707) |
+| 4 | Supabase auf dem VPS fertig einrichten, App deployen | `issuer`, dynamische Registrierung |
+| 5 | Test mit MCP Inspector, Claude Code, claude.ai | Ablauf aus Sicht des Clients |
+| 6 | Freigaben anzeigen und widerrufen | Grants |
 
 ## Kapitel
 
@@ -87,3 +103,4 @@ gespeicherter Verlauf.
 - [Kapitel 2 – Dashboard](02-dashboard.md)
 - [Kapitel 3 – Docker](03-docker.md)
 - [Kapitel 4 – Chat mit MCP](04-chat.md)
+- [Kapitel 5 – OAuth für MCP](05-oauth.md)
