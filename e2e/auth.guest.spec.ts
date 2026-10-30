@@ -1,7 +1,7 @@
 /**
  * Auth-Tests OHNE gespeicherte Session (Gast).
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { getTestUser, login } from "./helpers";
 
@@ -12,7 +12,8 @@ import { getTestUser, login } from "./helpers";
 test.describe("Ohne Login", () => {
   test("geschützte Seite leitet zum Login weiter", async ({ page }) => {
     await page.goto("/dashboard");
-    await expect(page).toHaveURL("/login");
+    // ?next= merkt sich das Ziel für den Rücksprung nach dem Login.
+    await expect(page).toHaveURL("/login?next=%2Fdashboard");
   });
 
   test("leeres Formular zeigt Feldfehler", async ({ page }) => {
@@ -75,6 +76,33 @@ test.describe("Ohne Login", () => {
 
     // Nach dem Logout ist das Dashboard wieder gesperrt.
     await page.goto("/dashboard");
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?next=%2Fdashboard");
+  });
+
+  // OAuth: Wer vom Client kommt und nicht angemeldet ist, muss nach dem
+  // Login zur Zustimmung zurück – MIT der authorization_id.
+  test("Login führt zurück zur OAuth-Zustimmung", async ({ page }) => {
+    await page.goto("/oauth/consent?authorization_id=e2e-test");
+    await expect(page).toHaveURL("/login?next=%2Foauth%2Fconsent%3Fauthorization_id%3De2e-test");
+
+    await fillLogin(page);
+    await expect(page).toHaveURL("/oauth/consent?authorization_id=e2e-test");
+    // Die ID ist erfunden, Supabase kennt sie nicht.
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("ungültig oder abgelaufen");
+  });
+
+  test("Login ignoriert fremde Rücksprung-Ziele", async ({ page }) => {
+    // "//boese.example" ist für Browser eine andere Website (Open Redirect).
+    await page.goto("/login?next=//boese.example/login");
+    await fillLogin(page);
+    await expect(page).toHaveURL("/dashboard");
   });
 });
+
+/** Login-Formular ausfüllen, ohne wie login() auf /dashboard zu bestehen. */
+async function fillLogin(page: Page) {
+  const { email, password } = getTestUser();
+  await page.getByLabel("E-Mail").fill(email);
+  await page.getByLabel("Passwort").fill(password);
+  await page.getByRole("button", { name: "Anmelden" }).click();
+}

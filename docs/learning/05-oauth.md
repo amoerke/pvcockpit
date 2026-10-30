@@ -172,3 +172,84 @@ dann gilt die Request-Adresse `http://localhost:3000`.
 **Getestet:** zwei neue E2E-Tests im Projekt `api`. Sie folgen dem Hinweis
 aus dem 401 ohne Login: Status 200, CORS-Header, `resource` und
 `authorization_servers`. Dazu die Adresse ohne Pfad. Alle 36 Tests grün.
+
+## Schritt 2 – Zustimmungsseite `/oauth/consent`
+
+| Datei | Aufgabe |
+|---|---|
+| `app/oauth/consent/page.tsx` | Anfrage bei Supabase holen, Client und Rechte zeigen |
+| `app/oauth/consent/actions.ts` | Server Action `decide`: erlauben oder ablehnen, zurück zum Client |
+| `lib/next-path.ts` | `safeNextPath()`: Rücksprung-Ziel prüfen (Open Redirect) |
+| `lib/supabase/proxy.ts`, `app/login/*` | `?next=` vom Proxy über das Login bis zur Weiterleitung |
+
+**Die Rolle der Seite:** Supabase Auth macht Registrierung, PKCE und Tokens.
+Nur die Frage „Darf dieses Programm das?“ stellt die App. Supabase leitet
+dazu mit `?authorization_id=…` hierher. Drei Methoden aus `supabase-js`
+genügen:
+
+| Methode | Wofür |
+|---|---|
+| `auth.oauth.getAuthorizationDetails(id)` | Wer fragt (Client-Name), welche Rechte, Rücksprung-Adresse. Hat der Nutzer schon zugestimmt, kommt direkt `redirect_url`. |
+| `auth.oauth.approveAuthorization(id)` | Zustimmung speichern, Code erzeugen → `redirect_url` mit `?code=…` |
+| `auth.oauth.denyAuthorization(id)` | → `redirect_url` mit `?error=access_denied` |
+
+Alle drei laufen mit dem Session-Cookie des Nutzers. Supabase prüft also
+selbst, dass die Anfrage zu **diesem** Nutzer gehört.
+
+**Server Action statt Route Handler:** Das Supabase-Beispiel nimmt einen
+Route Handler für die Entscheidung. Eine Server Action ist hier besser:
+Next.js prüft bei jeder Server Action den `Origin`-Header. Eine fremde
+Seite kann also kein verstecktes Formular abschicken, das in deinem Namen
+„Erlauben“ drückt (CSRF). Ein Route Handler müsste das selbst prüfen.
+
+**Ein Formular, zwei Knöpfe:** Beide sind `type="submit"` mit `name="decision"`.
+Der Browser schickt nur `name`/`value` des gedrückten Knopfs mit, die Action
+liest `decision` und prüft es mit zod (`"approve" | "deny"`).
+
+**`redirect()` zu einer fremden Adresse:** Am Ende leitet die Action zum
+Client weiter, z. B. an `http://localhost:…/callback?code=…` bei Claude Code.
+`redirect()` kann absolute URLs. Die Adresse stammt von Supabase (die beim
+Registrieren hinterlegte `redirect_uri`), nicht aus dem Formular. Die Seite
+zeigt sie trotzdem an: Eine unerwartete Rücksprung-Adresse ist ein
+Warnzeichen.
+
+**Rücksprung nach dem Login (`?next=`):** Wer vom Client kommt, ist oft nicht
+eingeloggt. Ohne Rücksprung landete er nach dem Login im Dashboard, und die
+`authorization_id` wäre verloren. Darum:
+
+1. Der Proxy leitet nach `/login?next=/oauth/consent?authorization_id=…`.
+2. Die Login-Seite gibt `next` als verstecktes Feld ans Formular.
+3. Die Login-Action leitet nach Erfolg dorthin.
+4. Ist man schon eingeloggt und ruft `/login?next=…` auf, springt der Proxy
+   direkt zum Ziel.
+
+**Open Redirect:** `next` kommt aus der URL, also von außen. Ungeprüft
+schickt ein Link wie `/login?next=https://boese.example` den Nutzer nach dem
+echten Login auf eine nachgemachte Seite. `safeNextPath()` lässt nur Pfade
+der eigenen App durch. Der Trick: den Wert relativ zu einer
+Platzhalter-Origin auflösen und prüfen, dass die Origin gleich bleibt.
+
+| Eingabe | Ergebnis |
+|---|---|
+| `/oauth/consent?authorization_id=abc` | unverändert |
+| `//boese.example` | `null` (für Browser eine andere Website) |
+| `/\boese.example` | `null` (Browser lesen `\` wie `/`) |
+| `https://boese.example`, `javascript:…` | `null` |
+
+Geprüft wird **zweimal**: auf der Login-Seite (Anzeige) und in der Action.
+Das versteckte Feld kommt vom Browser und lässt sich verändern.
+
+**Route-Typen:** `PageProps<"/oauth/consent">` kannte die neue Route erst
+nach `npx next typegen` (läuft sonst bei `next dev`/`next build` mit).
+
+**Getestet** (E2E, alle 40 grün):
+
+- Gast ruft `/oauth/consent?authorization_id=…` auf → `/login?next=…` →
+  nach dem Login zurück auf der Zustimmungsseite, mit derselben ID.
+- `/login?next=//boese.example/login` → nach dem Login `/dashboard`.
+- Eingeloggt auf `/login?next=/dashboard/savings` → direkt dorthin.
+- Unbekannte `authorization_id` → Hinweis „ungültig oder abgelaufen“.
+
+Noch nicht getestet: die Seite mit einer echten Anfrage. Eine
+`authorization_id` entsteht nur im echten Ablauf, und Supabase leitet dafür
+auf `pv.dataminer.cloud` weiter (Schritt 5).

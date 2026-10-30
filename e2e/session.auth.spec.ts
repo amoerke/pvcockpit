@@ -26,6 +26,16 @@ test.describe("Mit Login", () => {
     await expect(page).toHaveURL("/dashboard");
   });
 
+  test("Login-Seite mit ?next= leitet eingeloggte Nutzer dorthin", async ({ page }) => {
+    await page.goto("/login?next=%2Fdashboard%2Fsavings");
+    await expect(page).toHaveURL("/dashboard/savings");
+  });
+
+  test("OAuth-Zustimmung: unbekannte Anfrage zeigt Hinweis", async ({ page }) => {
+    await page.goto("/oauth/consent?authorization_id=e2e-unbekannt");
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("ungültig oder abgelaufen");
+  });
+
   test("Navigation wechselt zwischen Übersicht und Verlauf", async ({ page }) => {
     await page.goto("/dashboard");
     const nav = page.getByRole("navigation", { name: "Hauptnavigation" });

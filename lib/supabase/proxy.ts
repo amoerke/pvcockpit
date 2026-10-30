@@ -18,6 +18,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeNextPath } from "@/lib/next-path";
+
 import { supabaseAnonKey, supabaseUrl } from "./env";
 
 /** Pfade, die ohne Login erreichbar sein müssen. */
@@ -102,13 +104,17 @@ export async function updateSession(request: NextRequest) {
   // Nicht für /api/*: Die Route Handler prüfen selbst (Cookie ODER
   // Bearer-Token) und antworten mit 401. Erneuerte Cookies gibt der Proxy
   // aber auch dort weiter (Fall 3).
+  // Der ursprüngliche Pfad geht als ?next= mit, damit es nach dem Login dort
+  // weitergeht – z. B. zurück zur OAuth-Zustimmung mit ihrer authorization_id.
   if (!user && !isPublicPath(pathname) && !pathname.startsWith(API_PREFIX)) {
-    return redirectWithCookies(request, response, "/login");
+    const next = pathname === "/" ? undefined : pathname + request.nextUrl.search;
+    return redirectWithCookies(request, response, "/login", next);
   }
 
-  // Fall 2: Eingeloggt, aber auf /login → direkt ins Dashboard.
+  // Fall 2: Eingeloggt, aber auf /login → zum Ziel aus ?next= oder ins Dashboard.
   if (user && pathname === "/login") {
-    return redirectWithCookies(request, response, HOME_PATH);
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return redirectWithCookies(request, response, next ?? HOME_PATH);
   }
 
   // Fall 3: Alles in Ordnung → normal weiter, MIT den ggf. erneuerten Cookies.
@@ -126,12 +132,17 @@ export async function updateSession(request: NextRequest) {
 function redirectWithCookies(
   request: NextRequest,
   response: NextResponse,
-  pathname: string,
+  target: string,
+  next?: string,
 ) {
   // URL klonen statt neu bauen: behält Host, Port und Protokoll bei.
+  // `target` darf eine Query enthalten (z. B. aus ?next=), deshalb über URL
+  // auflösen statt nur pathname zu setzen.
+  const resolved = new URL(target, request.nextUrl);
   const url = request.nextUrl.clone();
-  url.pathname = pathname;
-  url.search = "";
+  url.pathname = resolved.pathname;
+  url.search = resolved.search;
+  if (next) url.searchParams.set("next", next);
 
   const redirect = NextResponse.redirect(url);
   response.cookies

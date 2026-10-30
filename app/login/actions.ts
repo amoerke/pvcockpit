@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { safeNextPath } from "@/lib/next-path";
 import { createClient } from "@/lib/supabase/server";
 
 import { LoginSchema, type LoginState } from "./definitions";
@@ -76,5 +77,8 @@ export async function login(
 
   // redirect() wirft intern eine spezielle Exception, die Next.js in eine
   // Weiterleitung übersetzt. Deshalb steht es AUSSERHALB jedes try/catch.
-  redirect("/dashboard");
+  //
+  // `next` kommt aus einem versteckten Feld, also vom Browser: hier ERNEUT
+  // prüfen, nicht der Login-Seite vertrauen.
+  redirect(safeNextPath(formData.get("next")) ?? "/dashboard");
 }

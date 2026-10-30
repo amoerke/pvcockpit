@@ -21,6 +21,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import { safeNextPath } from "@/lib/next-path";
+
 import { LoginForm } from "./login-form";
 
 // Überschreibt den Titel aus dem Root-Layout nur für diese Seite.
@@ -44,7 +46,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 // ist seit Next.js 15 ein PROMISE – die Seite wird dadurch dynamisch
 // gerendert (pro Request), weil die URL-Parameter erst dann feststehen.
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
+  // Rücksprung nach dem Login (z. B. zur OAuth-Zustimmung). Ungültiges fällt weg.
+  const nextPath = safeNextPath(next) ?? undefined;
   // Object.hasOwn statt nur ERROR_MESSAGES[error]: Sonst würde z. B.
   // `?error=toString` eine geerbte Objekt-Methode statt eines Texts liefern.
   const errorMessage =
@@ -65,7 +69,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
               {errorMessage}
             </p>
           )}
-          <LoginForm />
+          <LoginForm next={nextPath} />
         </CardContent>
         <CardFooter>
           <Link

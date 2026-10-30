@@ -24,7 +24,11 @@ import type { LoginState } from "./definitions";
 
 const initialState: LoginState = {};
 
-export function LoginForm() {
+/**
+ * `next`: wohin es nach dem Login geht (schon geprüft, siehe safeNextPath).
+ * Ein verstecktes Feld schickt den Wert mit dem Formular an die Action.
+ */
+export function LoginForm({ next }: { next?: string }) {
   // useActionState verbindet Formular und Server Action:
   // - state:      was die Action zuletzt zurückgegeben hat
   // - formAction: an <form action> übergeben; ruft `login(state, formData)` auf
@@ -36,6 +40,7 @@ export function LoginForm() {
     // sogar, bevor das JavaScript geladen ist (Progressive Enhancement) –
     // dann als normaler POST mit Seiten-Neuladen.
     <form action={formAction} className="flex flex-col gap-4" noValidate>
+      {next && <input type="hidden" name="next" value={next} />}
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">E-Mail</Label>
         <Input
