@@ -318,3 +318,66 @@ nur einmal lesen, daher `request.clone().json()` für das Log.
 | E2E-Projekt `api` | 15 grün |
 
 Ein echtes OAuth-Token (`via=oauth`) gibt es erst in Schritt 5.
+
+## Schritt 4 – Supabase auf dem VPS einrichten
+
+Dieser Schritt lief auf dem VPS, im Repository ändert sich nur das Journal.
+
+**Ausgangslage** (geprüft ohne `apikey`, wie ein MCP-Client):
+
+| Problem | Ursache | Lösung |
+|---|---|---|
+| `issuer` leer, Adressen relativ (`/oauth/authorize`) | `GOTRUE_JWT_ISSUER` fehlte | auf `https://ampere-db.dataminer.cloud/auth/v1` setzen |
+| keine Weiterleitung zur Zustimmung | Authorization-Pfad fehlte | `GOTRUE_OAUTH_SERVER_AUTHORIZATION_PATH=/oauth/consent` |
+| Registrierung 403 | abgeschaltet | `GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION=true` |
+| alle OAuth-Adressen 401 | Kong verlangt unter `/auth/v1/` den `apikey`, an der Wurzel greift die Basic-Auth des Dashboards | vier offene Routen in `kong.yml` |
+
+**Woher die Metadaten ihre Adressen nehmen:** Auth baut `issuer` und alle
+Endpunkte aus `GOTRUE_JWT_ISSUER`. Fehlt er, steht dort `""` und die
+Adressen bleiben relativ. Derselbe Wert landet als `iss` in jedem neuen
+Token. Vorher hatten die Tokens gar kein `iss`, und nichts im Stack prüft
+es. Bestehende Tokens blieben deshalb gültig.
+
+**Kong:** Supabase Auth selbst kennt kein `/auth/v1`, das Präfix entsteht
+erst in Kong. Kong verlangt dort für alles einen `apikey`, außer auf einer
+Liste offener Routen (`verify`, `callback`, `authorize`, …). Ein
+MCP-Client kennt den `apikey` nicht. Darum vier zusätzliche offene Routen:
+
+| Pfad (öffentlich) | Ziel bei Auth | Wofür |
+|---|---|---|
+| `/.well-known/oauth-authorization-server/auth/v1` | `/.well-known/oauth-authorization-server` | Discovery nach RFC 8414 (Pfad hinter dem Präfix), so dokumentiert Supabase es für MCP |
+| `/auth/v1/.well-known/oauth-authorization-server` | dasselbe | Variante „Pfad vor dem Präfix“ |
+| `/auth/v1/.well-known/openid-configuration` | `/.well-known/openid-configuration` | OIDC-Discovery |
+| `/auth/v1/oauth` | `/oauth` | `authorize`, `token`, `clients/register` |
+
+Was Nutzerdaten betrifft (Zustimmung, `userinfo`), liegt zwar auch unter
+`/oauth`, verlangt bei Auth aber weiterhin ein Nutzer-Token. Die
+Dienstnamen in `kong.yml` müssen zum eigenen Setup passen
+(hier `supabase-auth` statt `auth`).
+
+**Stolperstein: Anführungszeichen.** Mit
+`- GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION="true"` startete Auth
+nicht mehr, und das Login der App war ausgefallen. In der
+**Listen-Schreibweise** (`- KEY=wert`) gehören Anführungszeichen zum Wert:
+Auth bekam `"true"` statt `true`. Nur in der Map-Schreibweise
+(`KEY: "true"`) sind sie YAML-Syntax und verschwinden.
+
+Erkennen ließ sich das an Kong: `{"message":"name resolution failed"}` (503)
+auf **allen** `/auth/v1/`-Routen, auch den alten. Kong fand den Container
+nicht mehr im Docker-Netz. `/rest/v1/` lief dagegen weiter. Die Ursache
+zeigte `docker compose logs auth`.
+
+**Getestet** (von außen, ohne `apikey`):
+
+| Prüfung | Ergebnis |
+|---|---|
+| Metadaten an allen drei Adressen | 200 |
+| `issuer` | `https://ampere-db.dataminer.cloud/auth/v1` |
+| Endpunkte | absolut, inkl. `registration_endpoint` |
+| Login mit Passwort (Token-Skript) | funktioniert, Token hat jetzt `iss` |
+| Test-Client registrieren | 201, `client_id` |
+| `/oauth/authorize` mit PKCE und `resource` | 302 → `https://pv.dataminer.cloud/oauth/consent?authorization_id=…` |
+| App `/oauth/consent` ohne Login | 307 → `/login?next=…` |
+
+Der Test-Client heißt „Prüfung – kann gelöscht werden“. Er kann nichts,
+solange niemand zustimmt, und wird in Schritt 6 aufgeräumt.
