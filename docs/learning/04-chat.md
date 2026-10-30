@@ -454,3 +454,52 @@ sitzt unten.
 **Getestet:** zwei E2E-Tests mit abgefangener API und eine echte Frage im
 Browser („Was war gestern mein Autarkiegrad?“ → 39,2 %, ohne Markdown, zwei
 Abfragen aufklappbar).
+
+## Schritt 9 – API-Key im Container
+
+**Build-Zeit vs. Laufzeit:** `NEXT_PUBLIC_*` backt `next build` fest ins
+Browser-JavaScript ein, deshalb sind das Build-Args (Kapitel 3). Server-Code
+wie `lib/assistant/chat.ts` liest `process.env` dagegen **erst zur Laufzeit**.
+Der Key muss also nicht ins Image, nur in den laufenden Container.
+
+**Warum nicht als Build-Arg?** `ARG` und `ENV` bleiben in der Image-Historie
+(`docker image history`) und in `docker image inspect` lesbar. Jeder, der das
+Image hat, hätte den Key. Zur Laufzeit gesetzt, existiert er nur im laufenden
+Container.
+
+**`compose.yaml`:**
+
+```yaml
+environment:
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+```
+
+- `${VAR:-}` heißt: aus der Env-Datei übernehmen, sonst leer, und zwar ohne
+  Warnung. Ohne Key startet der Container trotzdem, `/api/chat` antwortet
+  dann mit 503.
+- Einzeln aufgezählt statt `env_file: .env.local`. Sonst kämen **alle**
+  Variablen in den Container, auch die E2E-Passwörter.
+- Key ändern heißt Container neu starten (`docker compose up -d`). Ein
+  `--build` ist nicht nötig.
+
+**Stolperstein `??` vs. `||`:** Fehlt `ANTHROPIC_MODEL`, setzt Compose einen
+**leeren String**. `process.env.ANTHROPIC_MODEL ?? "claude-haiku-5-5"` greift
+nur bei `undefined`/`null`, also wäre `model: ""` an die API gegangen.
+`||` fällt auch bei `""` auf den Standard zurück.
+
+**Getestet** (Image mit `docker compose --env-file .env.local build`, Container
+auf Port 3001):
+
+| Prüfung | Ergebnis |
+|---|---|
+| `ANTHROPIC_*` in `docker image inspect` (Config.Env) | nicht vorhanden |
+| `ANTHROPIC_API_KEY=` in `docker image history` | nicht vorhanden |
+| Key im laufenden Container gesetzt | ja |
+| „Wie voll ist die Batterie gerade?“ | 200, `get_live_status`, 21 % |
+| `docker run` ohne Key | `/api/chat` → 503 mit Hinweis |
+
+**Deployment:** Auf dem VPS gehört `ANTHROPIC_API_KEY` (optional
+`ANTHROPIC_MODEL`) in die Env-Datei, mit der Compose startet. Danach genügt
+ein Neustart des Containers. Nach dieser Änderung muss das Image einmal neu
+gebaut werden, weil neuer Code dazugekommen ist.

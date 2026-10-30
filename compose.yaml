@@ -12,6 +12,13 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    # Geheimnisse erst zur LAUFZEIT: Sie stehen nicht im Image, sondern nur
+    # im laufenden Container. Ändern = Container neu starten, kein --build.
+    # Bewusst einzeln aufgezählt statt `env_file: .env.local` – sonst kämen
+    # auch die E2E-Passwörter in den Container.
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
     ports:
       - "3000:3000"
     restart: unless-stopped

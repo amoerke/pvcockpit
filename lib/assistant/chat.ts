@@ -21,8 +21,12 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AuthenticatedClient } from "@/lib/assistant/auth";
 import { createMcpServer } from "@/lib/assistant/mcp-server";
 
-/** Standard: klein und günstig, reicht für Fragen zu Kennzahlen. */
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-5-5";
+/**
+ * Standard: klein und günstig, reicht für Fragen zu Kennzahlen.
+ * `||` statt `??`: Auch ein LEERER Wert fällt auf den Standard zurück. Den
+ * setzt Compose, wenn die Variable in der Env-Datei fehlt oder leer ist.
+ */
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 
 // Limits gegen Kosten und Endlosschleifen (Entscheidungen in 04-chat.md).
 const MAX_TOOL_ROUNDS = 5;

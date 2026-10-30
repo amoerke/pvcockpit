@@ -40,6 +40,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # von außerhalb des Containers nicht erreichbar. PORT steuert den Port.
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+# Geheimnisse wie ANTHROPIC_API_KEY stehen hier bewusst NICHT: ENV und ARG
+# bleiben in der Image-Historie lesbar. Sie kommen erst beim Start dazu
+# (compose.yaml → environment, oder `docker run -e`). Server-Code liest
+# process.env zur Laufzeit; nur NEXT_PUBLIC_-Werte werden beim Build eingebacken.
 
 # Eigener Nutzer ohne Root-Rechte: Bei einer Lücke hat ein Angreifer weniger Macht.
 RUN addgroup --system --gid 1001 nodejs \
