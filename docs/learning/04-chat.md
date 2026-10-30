@@ -321,3 +321,84 @@ reinen Funktionen. Hier geht es darum, dass die Teile zusammenspielen: Auth,
 Transport, Schema, Datenbank.
 
 Ausführen: `npx playwright test --project=api`
+
+## Schritt 7 – Chat-Backend
+
+| Datei | Aufgabe |
+|---|---|
+| `lib/assistant/chat.ts` | `runChat()`: MCP-Client, Tool-Schleife mit Claude |
+| `app/api/chat/route.ts` | HTTP: Auth, Eingabe prüfen, Verlauf kürzen, Fehler übersetzen |
+
+**Was ein MCP-Client tut:** Claude kennt unseren Server nicht. Der Client
+fragt ihn nach seinen Tools (`tools/list`) und gibt sie Claude als `tools`
+mit. Antwortet Claude mit `stop_reason: "tool_use"`, führt der Client die
+gewünschten Tools aus (`tools/call`) und schickt die Ergebnisse als
+`tool_result` zurück. Das wiederholt sich, bis Claude Text schreibt. Genau
+das macht Claude Code im Hintergrund, hier steht es in etwa 40 Zeilen.
+
+**Zwei Formate, fast gleich:** MCP beschreibt ein Tool mit `inputSchema`, die
+Claude API mit `input_schema`. Der Rest passt 1:1, die Beschreibungen aus
+Schritt 4 kommen also unverändert beim Modell an.
+
+**Server im selben Prozess:** Statt per HTTP an `/api/mcp` zu gehen, verbindet
+`InMemoryTransport.createLinkedPair()` Client und Server direkt im Speicher.
+Der Server bekommt den schon geprüften Supabase-Client des Nutzers. Es muss
+also kein Token weitergereicht werden, und es gibt keinen zweiten
+HTTP-Request. Dieselbe Technik haben wir in Schritt 2 zum Testen benutzt.
+
+**Regeln der Schleife:**
+
+- Die Antwort von Claude wird **unverändert** angehängt (`response.content`),
+  auch mit Thinking-Blöcken. Haiku 5.5 denkt standardmäßig und prüft beim
+  nächsten Aufruf, dass der Verlauf vor diesen Blöcken unverändert ist.
+- Alle Tool-Ergebnisse einer Runde gehen in **einer** `user`-Nachricht zurück.
+  Claude darf mehrere Tools auf einmal verlangen; wir führen sie parallel aus.
+- Ein Tool-Fehler wird zu `is_error: true`. Claude liest den Text (z. B.
+  „Gröberen bucket wählen“) und kann es noch einmal versuchen.
+- Den Antworttext nach `type === "text"` suchen, nicht `content[0]` nehmen:
+  Vorne können Thinking-Blöcke stehen.
+
+**Limits:**
+
+| Limit | Wert | Wogegen |
+|---|---|---|
+| Tool-Runden | 5 | Schleifen, die nie enden |
+| `max_tokens` | 1024 | lange Antworten; Denken zählt mit |
+| `effort` | `low` | unnötiges Nachdenken bei einfachen Fragen |
+| Verlauf | letzte 10 Nachrichten | jede alte Nachricht kostet bei jeder Frage erneut |
+| Nachrichtenlänge | 2000 Zeichen | riesige Eingaben |
+| Ausgabenlimit | in der Claude Console | alles andere |
+
+**Verlauf kürzen ist hier unproblematisch:** Der Browser schickt nur Text
+ohne Thinking-Blöcke. Was nicht mitgeschickt wird, kann Claude auch nicht als
+„verändert“ erkennen. Beginnt der gekürzte Verlauf mit einer Antwort, fällt
+sie weg, denn die erste Nachricht muss vom Nutzer kommen.
+
+**Route Handler statt Server Action:** Die Chat-Seite könnte auch eine Server
+Action aufrufen. Ein Route Handler lässt sich aber ohne Browser testen (mit
+Bearer-Token, wie `/api/mcp`), und Streaming braucht später ohnehin einen
+`Response`-Body.
+
+**Fehler:** Das SDK wirft typisierte Fehler. `RateLimitError` wird zu 503
+(„gleich noch einmal“), jeder andere `APIError` zu 502, und das Detail landet
+nur im Server-Log. Fehlt `ANTHROPIC_API_KEY`, antwortet die Route mit 503 und
+einem klaren Hinweis, bevor das SDK es überhaupt versucht.
+
+**Der Key gehört nur auf den Server:** `ANTHROPIC_API_KEY` hat kein
+`NEXT_PUBLIC_`. Damit kommt er nie in das JavaScript für den Browser.
+`new Anthropic()` liest ihn selbst aus der Umgebung.
+
+**Getestet** mit einem Node-Skript per Bearer-Token: ohne Ausweis 401,
+kaputtes JSON 400, leere Liste 400, letzte Nachricht vom Assistenten 400,
+ohne Key 503.
+
+Mit Key, zwei echte Fragen an `claude-haiku-5-5`:
+
+| Frage | Tool-Aufrufe | Antwort |
+|---|---|---|
+| „Was war gestern mein Autarkiegrad?“ | `get_current_date` → `get_energy_summary(29.10., 29.10.)` | 39,2 % (1 − 12,71 / 20,89 kWh, stimmt) |
+| „Welcher Tag der letzten 7 Tage hatte die meiste PV, und wie viel habe ich gespart?“ | `get_current_date` → `get_energy_by_period(day)` + `get_savings` | 29.10. mit 10,93 kWh; 13,91 € gesamt; Hinweis, dass heute erst 17,7 von 24 Stunden erfasst sind |
+
+Bei der zweiten Frage hat Claude zwei Tools **in einer Runde** verlangt, und
+die Schleife hat sie parallel ausgeführt. Den Hinweis auf den unvollständigen
+Tag hat es aus `measured_hours` abgeleitet, wie in Schritt 1 geplant.
