@@ -402,3 +402,55 @@ Mit Key, zwei echte Fragen an `claude-haiku-5-5`:
 Bei der zweiten Frage hat Claude zwei Tools **in einer Runde** verlangt, und
 die Schleife hat sie parallel ausgeführt. Den Hinweis auf den unvollständigen
 Tag hat es aus `measured_hours` abgeleitet, wie in Schritt 1 geplant.
+
+## Schritt 8 – Chat-Seite `/dashboard/chat`
+
+| Datei | Aufgabe |
+|---|---|
+| `app/dashboard/chat/page.tsx` | Server Component: Login prüfen, Überschrift |
+| `app/dashboard/chat/chat.tsx` | Client-Insel: Verlauf, Eingabe, Beispielfragen, Abfragen |
+| `app/dashboard/dashboard-nav.tsx` | neuer Menüpunkt „Assistent“ |
+
+**Wieder das Muster Server-Seite + Client-Insel:** Die Seite bleibt eine
+Server Component, nur `<Chat />` läuft im Browser. Typen aus `lib/assistant/chat.ts`
+holt die Insel mit `import type`. Der Import verschwindet beim Kompilieren,
+`server-only` und das Anthropic SDK landen also nicht im Browser-Bundle.
+
+**Fetch statt Server Action:** Die Insel ruft `/api/chat` mit `fetch()` auf.
+Das Session-Cookie geht von selbst mit, weil die Anfrage an dieselbe Origin
+geht. Die Route prüft es mit `authenticateRequest()`, wie in Schritt 3.
+
+**Optimistisch anzeigen, bei Fehler zurücknehmen:** Die Frage erscheint sofort.
+Schlägt die Anfrage fehl, verschwindet sie wieder, steht erneut im
+Eingabefeld, und darüber erscheint die Fehlermeldung. So lässt sie sich
+einfach noch einmal schicken.
+
+**Woher kommen die Zahlen?** Unter jeder Antwort klappt `<details>` die
+Tool-Aufrufe auf, z. B. `get_energy_summary(from: 2026-10-29, …)`. Das
+schafft Vertrauen und hilft beim Prüfen. `<details>` braucht kein JavaScript
+und ist von Haus aus per Tastatur bedienbar.
+
+**Kein Markdown:** Claude schrieb `**39,2 %**`. Statt eine Markdown-Bibliothek
+einzubauen, bittet der System-Prompt um schlichten Text. Absätze bleiben mit
+`whitespace-pre-wrap` erhalten.
+
+**Barrierefreiheit:** Die Nachrichtenliste hat `aria-live="polite"`, damit
+Screenreader neue Antworten von selbst vorlesen. Fehler stehen in
+`role="alert"`.
+
+**UI-Tests ohne Modell:** `page.route("/api/chat", …)` fängt die Anfrage im
+Browser ab und antwortet mit fester JSON. Der Test prüft also die
+Oberfläche, nicht das Modell: was geschickt wird, was angezeigt wird, was bei
+einem Fehler passiert. Er ist deterministisch, schnell und kostet nichts.
+
+**Stolperstein:** `getByRole("alert")` traf **zwei** Elemente. Next.js legt
+auf jeder Seite einen leeren `role="alert"` an (`__next-route-announcer__`),
+der Screenreadern Seitenwechsel ansagt. Lösung: `.filter({ hasText: … })`.
+
+**Layout:** `h-full` greift in einer Flex-Spalte nicht, weil die Karte keine
+feste Höhe hat. Mit `flex-1` füllt der Inhalt die Karte aus, und die Eingabe
+sitzt unten.
+
+**Getestet:** zwei E2E-Tests mit abgefangener API und eine echte Frage im
+Browser („Was war gestern mein Autarkiegrad?“ → 39,2 %, ohne Markdown, zwei
+Abfragen aufklappbar).

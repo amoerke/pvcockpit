@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Übersicht" },
   { href: "/dashboard/history", label: "Verlauf" },
   { href: "/dashboard/savings", label: "Ersparnis" },
+  { href: "/dashboard/chat", label: "Assistent" },
 ] as const;
 
 export function DashboardNav() {

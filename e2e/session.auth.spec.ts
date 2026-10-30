@@ -154,6 +154,61 @@ test.describe("Mit Login", () => {
     await expect(page.getByText(/^Summe über \d+ von \d+ Tagen/)).toBeVisible();
   });
 
+  // page.route() fängt die Anfrage an /api/chat im Browser ab und antwortet
+  // selbst. So testet der Test die Oberfläche – ohne Modell, ohne Kosten,
+  // mit immer derselben Antwort.
+  test("Assistent: Beispielfrage zeigt Antwort und Abfragen", async ({ page }) => {
+    let sentBody: unknown;
+    await page.route("/api/chat", async (route) => {
+      sentBody = route.request().postDataJSON();
+      await route.fulfill({
+        json: {
+          answer: "Gestern lag dein Autarkiegrad bei 39,2 %.",
+          toolCalls: [
+            { name: "get_current_date", input: {}, isError: false },
+            { name: "get_energy_summary", input: { from: "2026-10-29", to: "2026-10-29" }, isError: false },
+          ],
+        },
+      });
+    });
+
+    await page.goto("/dashboard");
+    await page
+      .getByRole("navigation", { name: "Hauptnavigation" })
+      .getByRole("link", { name: "Assistent" })
+      .click();
+    await expect(page).toHaveURL("/dashboard/chat");
+
+    await page.getByRole("button", { name: "Was war gestern mein Autarkiegrad?" }).click();
+
+    await expect(page.getByText("Gestern lag dein Autarkiegrad bei 39,2 %.")).toBeVisible();
+    expect(sentBody).toEqual({
+      messages: [{ role: "user", content: "Was war gestern mein Autarkiegrad?" }],
+    });
+
+    // Die Abfragen sind eingeklappt und lassen sich aufklappen.
+    await page.getByText("2 Abfragen").click();
+    await expect(page.getByText("get_energy_summary(from: 2026-10-29, to: 2026-10-29)")).toBeVisible();
+  });
+
+  test("Assistent: Fehler zeigt Meldung und behält die Frage", async ({ page }) => {
+    await page.route("/api/chat", (route) =>
+      route.fulfill({ status: 503, json: { error: "Der Assistent ist gerade nicht erreichbar." } }),
+    );
+
+    await page.goto("/dashboard/chat");
+    const question = page.getByRole("textbox", { name: "Frage" });
+    await question.fill("Wie voll ist die Batterie?");
+    await page.getByRole("button", { name: "Fragen" }).click();
+
+    // filter(): Next.js hat selbst ein leeres role="alert" auf jeder Seite
+    // (Route-Announcer, sagt Screenreadern Seitenwechsel an).
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Der Assistent ist gerade nicht erreichbar." }),
+    ).toBeVisible();
+    await expect(question).toHaveValue("Wie voll ist die Batterie?");
+  });
+
   test("Theme-Umschalter setzt das dunkle Farbschema", async ({ page }) => {
     await page.goto("/dashboard");
 
