@@ -24,3 +24,10 @@ if (!url || !anonKey) {
 
 export const supabaseUrl = url;
 export const supabaseAnonKey = anonKey;
+
+/**
+ * Schema mit allen Tabellen und Funktionen der App. Ohne diese Angabe fragt der
+ * Client im Standardschema public. Das `as const` hält den Typ beim genauen
+ * Namen, den das Generic `<Database, typeof dbSchema>` braucht.
+ */
+export const dbSchema = "ampere_solar" as const;

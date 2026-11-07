@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 import { minutesSince, toLiveReading, type LiveReading } from "@/lib/readings/live";
 import { createClient } from "@/lib/supabase/client";
+import { dbSchema } from "@/lib/supabase/env";
 import type { Tables } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -73,7 +74,8 @@ export function LiveDashboard({
         // Generic = Zeilentyp → payload.new ist typisiert statt `any`.
         .on<Tables<"solar_readings">>(
           "postgres_changes",
-          { event: "INSERT", schema: "ampere_solar", table: "solar_readings" },
+          // Realtime läuft nicht über PostgREST und braucht das Schema extra.
+          { event: "INSERT", schema: dbSchema, table: "solar_readings" },
           (payload) => {
             // Bei fehlenden Rechten ist payload.new leer und der Grund steht
             // in payload.errors – dann den alten Wert stehen lassen.

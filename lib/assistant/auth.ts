@@ -16,10 +16,10 @@ import "server-only";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database.types";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
+import { dbSchema, supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 import { createClient as createCookieClient } from "@/lib/supabase/server";
 
-export type AuthenticatedClient = SupabaseClient<Database>;
+export type AuthenticatedClient = SupabaseClient<Database, typeof dbSchema>;
 
 /**
  * Wer ruft an, und wie hat er sich ausgewiesen?
@@ -57,7 +57,8 @@ export async function authenticateRequest(request: Request): Promise<Caller | nu
 }
 
 async function bearerCaller(token: string): Promise<Caller | null> {
-  const supabase = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+  const supabase = createSupabaseClient<Database, typeof dbSchema>(supabaseUrl, supabaseAnonKey, {
+    db: { schema: dbSchema },
     // Jede Abfrage schickt das Token mit → PostgREST setzt auth.uid() und
     // wendet RLS an, genau wie beim Cookie-Client.
     global: { headers: { Authorization: `Bearer ${token}` } },

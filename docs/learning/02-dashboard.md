@@ -982,10 +982,12 @@ bei `range=all`.
 - Im Browser: „Alles“ zeigt 15.09.–19.10.2026 mit Tagesbalken (35 Tage ≤ 62)
   und 38,26 € gesamt. 7 Tage, Einspeisung: 0,05 € aus 0,6 kWh.
 
-## Schritt 23 – Eigenes Schema: `ampere_solar.solar_readings`
+## Schritt 23 – Eigenes Schema: `ampere_solar`
 
-> Dateien: `supabase/migrations/0006_ampere_solar_schema.sql`, `lib/data/readings.ts`,
-> `lib/assistant/data.ts`, `app/dashboard/live-dashboard.tsx`, `lib/supabase/database.types.ts`
+> Dateien: `supabase/migrations/0006_ampere_solar_schema.sql`,
+> `supabase/migrations/0007_ampere_solar_everything.sql`, `lib/supabase/env.ts`,
+> `lib/supabase/server.ts`, `lib/supabase/client.ts`, `lib/assistant/auth.ts`,
+> `app/dashboard/live-dashboard.tsx`, `lib/supabase/database.types.ts`
 
 ### Warum sucht die App nach dem Umzug weiter in `public`?
 
@@ -997,28 +999,43 @@ Schema also ausdrücklich nennen. Dafür muss es an vier Stellen bekannt sein:
 |---|---|---|
 | PostgREST | `ampere_solar` in `PGRST_DB_SCHEMAS` | `PGRST106` |
 | Postgres | `grant usage on schema` | `42501`, permission denied for schema |
-| SQL-Funktion | Tabellenname in `daily_energy()` | Verlauf und Ersparnis schlagen fehl |
-| App | `.schema()` und der Realtime-Filter | Tabelle nicht gefunden, keine Live-Updates |
+| SQL-Funktionen | Namen im Funktionskörper | Verlauf und Ersparnis schlagen fehl |
+| App | `db.schema` und der Realtime-Filter | `PGRST202`/`PGRST205`, keine Live-Updates |
 
-### `.schema()` statt `db: { schema }`
+### `db: { schema }` statt `.schema()` an jeder Abfrage
 
-`createClient(…, { db: { schema: "ampere_solar" } })` würde **alle** Aufrufe
-umleiten, auch `tariffs` und `rpc()`. Beide bleiben aber in `public`. Deshalb
-nennt jede Abfrage auf `solar_readings` das Schema selbst:
+Tabellen und Funktionen liegen alle in `ampere_solar`. Deshalb ist das Schema
+einmal zentral festgelegt (`dbSchema` in `lib/supabase/env.ts`) und gilt für
+`from()` und `rpc()`:
 
 ```ts
-supabase.schema("ampere_solar").from("solar_readings")
+createServerClient<Database, typeof dbSchema>(url, key, {
+  db: { schema: dbSchema },
+  cookies: { … },
+});
 ```
 
+Das zweite Generic ist nötig: Ohne es prüft TypeScript gegen `public`.
+`.schema()` an jeder Abfrage wäre nur sinnvoll, wenn die Objekte auf mehrere
+Schemas verteilt wären.
+
 Realtime läuft nicht über PostgREST und hat einen eigenen Filter
-(`schema: "ampere_solar"`). Die `.schema()`-Angabe wirkt dort nicht.
+(`schema: dbSchema`). Die Einstellung `db.schema` wirkt dort nicht.
 
-### Warum zieht `daily_energy()` nicht mit?
+### Warum ziehen die Funktionskörper nicht mit?
 
-Rechte, RLS, Policies und die Publication hängen an der Tabelle selbst und
-bleiben bei `SET SCHEMA` erhalten. Der Körper einer SQL-Funktion ist dagegen
-Text und wird erst beim Aufruf aufgelöst. Dort steht weiter
-`public.solar_readings`, also braucht die Funktion ein `create or replace`.
+Rechte, RLS, Policies und die Publication hängen am Objekt selbst und bleiben
+bei `SET SCHEMA` erhalten. Der Körper einer SQL-Funktion ist dagegen Text und
+wird erst beim Aufruf aufgelöst. Nach dem Verschieben liegt zwar
+`ampere_solar.savings_by_period`, darin steht aber weiter
+`public.daily_savings`. Deshalb setzt Migration 0007 alle drei Funktionen neu.
+
+### Stolperstein: Migration 0006 und das Fehlerbild
+
+Migration 0006 nahm an, dass die Funktionen in `public` bleiben, und legte
+`public.daily_energy` an. Lagen sie schon in `ampere_solar`, gab es diese
+Funktion danach zweimal. Darum fand die App `daily_energy` noch,
+`savings_by_period` aber nicht (`PGRST202`). Migration 0007 entfernt die Kopie.
 
 ### Einrichtung auf dem VPS
 
@@ -1037,7 +1054,7 @@ schreiben. Der Nutzer, mit dem er sich anmeldet, braucht `USAGE` auf dem Schema.
 
 ### Typen
 
-`database.types.ts` führt die Tabelle jetzt unter `ampere_solar`. Der Helfer
+`database.types.ts` führt alle Tabellen und Funktionen unter `ampere_solar`. Der Helfer
 `Tables<"solar_readings">` zeigt auf dieses Schema. `npm run db:types` erzeugt
 beide Schemas, ersetzt aber auch den Helfer. Die Aufrufe heißen dann
 `Tables<{ schema: "ampere_solar" }, "solar_readings">`.
@@ -1045,10 +1062,14 @@ beide Schemas, ersetzt aber auch den Helfer. Die Aufrufe heißen dann
 ### Geprüft (07.11.2026)
 
 - `tsc`, ESLint ohne Befund.
-- Migrationen 0001–0003 und 0006 in einem Wegwerf-Container (`postgres:17-alpine`)
-  mit Beispieldaten, 0006 zweimal: Rechte, Policy und Publication sind erhalten.
-  `daily_energy()` liefert als `authenticated` Werte, `anon` bekommt
+- Migrationen 0001–0007 in Wegwerf-Containern (`postgres:17-alpine`) mit
+  Beispieldaten, 0007 zweimal. Einmal mit von Hand verschobenen Funktionen,
+  einmal als frischer Aufbau. Danach liegen alle drei Funktionen nur noch in
+  `ampere_solar`. Rechte, Policies und Publication sind erhalten, `anon` bekommt
   `permission denied for schema`.
+- Mit PostgREST und `supabase-js` (`db.schema`): `from()` auf beide Tabellen und
+  `rpc()` auf `daily_energy` und `savings_by_period` liefern Daten. Ohne echtes
+  Login-Token, der Test lief direkt mit der Rolle `authenticated`.
 - **Noch offen:** Test gegen die echte Datenbank, also Dashboard, Live-Updates,
   Verlauf, Ersparnis und MCP. E2E-Tests erst, wenn die Einrichtung auf dem VPS
   erledigt ist.

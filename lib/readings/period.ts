@@ -10,7 +10,7 @@ import { addDays, type DayString } from "@/lib/time";
 
 /** Eine Ergebniszeile der Postgres-Funktion daily_energy() (Migration 0003). */
 export type DailyEnergyRow =
-  Database["public"]["Functions"]["daily_energy"]["Returns"][number];
+  Database["ampere_solar"]["Functions"]["daily_energy"]["Returns"][number];
 
 /**
  * Die erlaubten Werte für ?range=… – alles andere zeigt die Tagesansicht.

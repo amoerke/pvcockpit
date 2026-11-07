@@ -11,7 +11,7 @@ import { countDays, RANGES, rangeDays, type Bucket } from "./period";
 
 /** Eine Ergebniszeile der Postgres-Funktion savings_by_period(). */
 export type SavingsPeriodRow =
-  Database["public"]["Functions"]["savings_by_period"]["Returns"][number];
+  Database["ampere_solar"]["Functions"]["savings_by_period"]["Returns"][number];
 
 /**
  * Zeiträume der Ersparnis-Seite: die aus dem Verlauf plus "Alles".
