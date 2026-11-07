@@ -26,6 +26,6 @@ fi
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
 
-npx supabase gen types typescript --db-url "$SUPABASE_DB_URL" --schema public > "$TMP"
+npx supabase gen types typescript --db-url "$SUPABASE_DB_URL" --schema public,ampere_solar > "$TMP"
 mv "$TMP" "$OUT"
 echo "Typen geschrieben: $OUT"

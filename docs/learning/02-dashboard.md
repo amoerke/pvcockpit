@@ -981,3 +981,74 @@ bei `range=all`.
 - `tsc`, ESLint ohne Befund. E2E 19/19 grün (neu: „Alles“).
 - Im Browser: „Alles“ zeigt 15.09.–19.10.2026 mit Tagesbalken (35 Tage ≤ 62)
   und 38,26 € gesamt. 7 Tage, Einspeisung: 0,05 € aus 0,6 kWh.
+
+## Schritt 23 – Eigenes Schema: `ampere_solar.solar_readings`
+
+> Dateien: `supabase/migrations/0006_ampere_solar_schema.sql`, `lib/data/readings.ts`,
+> `lib/assistant/data.ts`, `app/dashboard/live-dashboard.tsx`, `lib/supabase/database.types.ts`
+
+### Warum sucht die App nach dem Umzug weiter in `public`?
+
+Der Client spricht mit PostgREST und nennt den Tabellennamen ohne Schema.
+Ohne weitere Angabe gilt das Standardschema `public`. Die App muss das neue
+Schema also ausdrücklich nennen. Dafür muss es an vier Stellen bekannt sein:
+
+| Ebene | Was | Fehler, wenn es fehlt |
+|---|---|---|
+| PostgREST | `ampere_solar` in `PGRST_DB_SCHEMAS` | `PGRST106` |
+| Postgres | `grant usage on schema` | `42501`, permission denied for schema |
+| SQL-Funktion | Tabellenname in `daily_energy()` | Verlauf und Ersparnis schlagen fehl |
+| App | `.schema()` und der Realtime-Filter | Tabelle nicht gefunden, keine Live-Updates |
+
+### `.schema()` statt `db: { schema }`
+
+`createClient(…, { db: { schema: "ampere_solar" } })` würde **alle** Aufrufe
+umleiten, auch `tariffs` und `rpc()`. Beide bleiben aber in `public`. Deshalb
+nennt jede Abfrage auf `solar_readings` das Schema selbst:
+
+```ts
+supabase.schema("ampere_solar").from("solar_readings")
+```
+
+Realtime läuft nicht über PostgREST und hat einen eigenen Filter
+(`schema: "ampere_solar"`). Die `.schema()`-Angabe wirkt dort nicht.
+
+### Warum zieht `daily_energy()` nicht mit?
+
+Rechte, RLS, Policies und die Publication hängen an der Tabelle selbst und
+bleiben bei `SET SCHEMA` erhalten. Der Körper einer SQL-Funktion ist dagegen
+Text und wird erst beim Aufruf aufgelöst. Dort steht weiter
+`public.solar_readings`, also braucht die Funktion ein `create or replace`.
+
+### Einrichtung auf dem VPS
+
+In der `.env` des Supabase-Stacks das Schema ergänzen und vorhandene Einträge
+behalten:
+
+```bash
+PGRST_DB_SCHEMAS=public,graphql_public,ampere_solar
+```
+
+Danach `docker compose up -d rest` ausführen. Ein einfaches `restart` liest die
+`.env` nicht neu ein.
+
+Auch der Pi-Service, der die Messwerte schreibt, muss in die neue Tabelle
+schreiben. Der Nutzer, mit dem er sich anmeldet, braucht `USAGE` auf dem Schema.
+
+### Typen
+
+`database.types.ts` führt die Tabelle jetzt unter `ampere_solar`. Der Helfer
+`Tables<"solar_readings">` zeigt auf dieses Schema. `npm run db:types` erzeugt
+beide Schemas, ersetzt aber auch den Helfer. Die Aufrufe heißen dann
+`Tables<{ schema: "ampere_solar" }, "solar_readings">`.
+
+### Geprüft (07.11.2026)
+
+- `tsc`, ESLint ohne Befund.
+- Migrationen 0001–0003 und 0006 in einem Wegwerf-Container (`postgres:17-alpine`)
+  mit Beispieldaten, 0006 zweimal: Rechte, Policy und Publication sind erhalten.
+  `daily_energy()` liefert als `authenticated` Werte, `anon` bekommt
+  `permission denied for schema`.
+- **Noch offen:** Test gegen die echte Datenbank, also Dashboard, Live-Updates,
+  Verlauf, Ersparnis und MCP. E2E-Tests erst, wenn die Einrichtung auf dem VPS
+  erledigt ist.

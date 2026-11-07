@@ -48,6 +48,7 @@ export async function getSavingsByPeriod(
 /** Der neueste Messwert – oder `null`, wenn die Tabelle leer ist. */
 export async function getLatestRow(supabase: AuthenticatedClient): Promise<LiveRow | null> {
   const { data, error } = await supabase
+    .schema("ampere_solar")
     .from("solar_readings")
     .select(LIVE_COLUMNS)
     .order("ts", { ascending: false })
@@ -66,6 +67,7 @@ export async function getLatestRow(supabase: AuthenticatedClient): Promise<LiveR
  */
 export async function getFirstDataDay(supabase: AuthenticatedClient): Promise<DayString | null> {
   const { data, error } = await supabase
+    .schema("ampere_solar")
     .from("solar_readings")
     .select("ts")
     .not("sys_pv_power", "is", null)

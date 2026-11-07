@@ -54,6 +54,8 @@ export async function getLatestReading(): Promise<LatestReading | null> {
 
   const supabase = await createClient();
   const { data, error } = await supabase
+    // Ohne .schema() fragt der Client im Standardschema public.
+    .schema("ampere_solar")
     .from("solar_readings")
     .select(LIVE_COLUMNS)
     // Dank des Index auf `ts` (UNIQUE-Constraint) muss Postgres dafür nicht
@@ -101,6 +103,7 @@ async function fetchDayRows(start: string, end: string): Promise<TodayRow[]> {
 
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
+      .schema("ampere_solar")
       .from("solar_readings")
       .select(TODAY_COLUMNS)
       .gte("ts", start)

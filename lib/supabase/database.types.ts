@@ -13,6 +13,78 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      // Migration 0004. numeric kommt als number; date als "YYYY-MM-DD".
+      tariffs: {
+        Row: {
+          valid_from: string;
+          price_ct_per_kwh: number;
+          feed_in_ct_per_kwh: number;
+        };
+        Insert: {
+          valid_from: string;
+          price_ct_per_kwh: number;
+          feed_in_ct_per_kwh: number;
+        };
+        Update: {
+          valid_from?: string;
+          price_ct_per_kwh?: number;
+          feed_in_ct_per_kwh?: number;
+        };
+        Relationships: [];
+      };
+    };
+    Views: { [_ in never]: never };
+    Functions: {
+      // Migration 0003. Args: date kommt/geht als "YYYY-MM-DD"-String.
+      // Returns als Array: Die Funktion liefert eine Tabelle (eine Zeile je Tag).
+      daily_energy: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          pv_kwh: number;
+          house_kwh: number;
+          battery_charge_kwh: number;
+          battery_discharge_kwh: number;
+          grid_import_kwh: number;
+          grid_export_kwh: number;
+          measured_hours: number;
+        }[];
+      };
+      // Migration 0004. Tarif- und €-Spalten sind null, wenn für den Tag
+      // kein Tarif hinterlegt ist (LEFT JOIN). Der Generator würde hier
+      // `number` schreiben – `number | null` ist ehrlicher.
+      daily_savings: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          self_consumption_kwh: number;
+          grid_export_kwh: number;
+          price_ct_per_kwh: number | null;
+          feed_in_ct_per_kwh: number | null;
+          savings_eur: number | null;
+          feed_in_eur: number | null;
+        }[];
+      };
+      // Migration 0005. € null = im Zeitraum kein Tag mit Tarif.
+      savings_by_period: {
+        Args: { p_from: string; p_to: string; p_bucket: string };
+        Returns: {
+          period: string;
+          self_consumption_kwh: number;
+          grid_export_kwh: number;
+          savings_eur: number | null;
+          feed_in_eur: number | null;
+          days_with_data: number;
+          days_without_tariff: number;
+        }[];
+      };
+    };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
+  };
+  // Migration 0006: eigenes Schema für die Messwerte.
+  ampere_solar: {
+    Tables: {
       solar_readings: {
         // Row: so sieht eine gelesene Zeile aus (SELECT).
         Row: {
@@ -136,77 +208,14 @@ export type Database = {
         };
         Relationships: [];
       };
-      // Migration 0004. numeric kommt als number; date als "YYYY-MM-DD".
-      tariffs: {
-        Row: {
-          valid_from: string;
-          price_ct_per_kwh: number;
-          feed_in_ct_per_kwh: number;
-        };
-        Insert: {
-          valid_from: string;
-          price_ct_per_kwh: number;
-          feed_in_ct_per_kwh: number;
-        };
-        Update: {
-          valid_from?: string;
-          price_ct_per_kwh?: number;
-          feed_in_ct_per_kwh?: number;
-        };
-        Relationships: [];
-      };
     };
     Views: { [_ in never]: never };
-    Functions: {
-      // Migration 0003. Args: date kommt/geht als "YYYY-MM-DD"-String.
-      // Returns als Array: Die Funktion liefert eine Tabelle (eine Zeile je Tag).
-      daily_energy: {
-        Args: { p_from: string; p_to: string };
-        Returns: {
-          day: string;
-          pv_kwh: number;
-          house_kwh: number;
-          battery_charge_kwh: number;
-          battery_discharge_kwh: number;
-          grid_import_kwh: number;
-          grid_export_kwh: number;
-          measured_hours: number;
-        }[];
-      };
-      // Migration 0004. Tarif- und €-Spalten sind null, wenn für den Tag
-      // kein Tarif hinterlegt ist (LEFT JOIN). Der Generator würde hier
-      // `number` schreiben – `number | null` ist ehrlicher.
-      daily_savings: {
-        Args: { p_from: string; p_to: string };
-        Returns: {
-          day: string;
-          self_consumption_kwh: number;
-          grid_export_kwh: number;
-          price_ct_per_kwh: number | null;
-          feed_in_ct_per_kwh: number | null;
-          savings_eur: number | null;
-          feed_in_eur: number | null;
-        }[];
-      };
-      // Migration 0005. € null = im Zeitraum kein Tag mit Tarif.
-      savings_by_period: {
-        Args: { p_from: string; p_to: string; p_bucket: string };
-        Returns: {
-          period: string;
-          self_consumption_kwh: number;
-          grid_export_kwh: number;
-          savings_eur: number | null;
-          feed_in_eur: number | null;
-          days_with_data: number;
-          days_without_tariff: number;
-        }[];
-      };
-    };
+    Functions: { [_ in never]: never };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };
 };
 
 /** Kurzform: `Tables<"solar_readings">` = Typ einer gelesenen Zeile. */
-export type Tables<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Row"];
+export type Tables<T extends keyof Database["ampere_solar"]["Tables"]> =
+  Database["ampere_solar"]["Tables"][T]["Row"];

@@ -47,6 +47,7 @@ Schema-Dump, generierte Typen, RLS-Policies, Statistiken zu den AmpereStorage-We
 | 20 | Tarife und `daily_savings()` (Migration 0004) | Preise mit gültig-ab, `numeric`, `LEFT JOIN LATERAL` |
 | 21 | Seite Ersparnis | Zwei Werte in der URL, Umschalter Ersparnis/Einspeisung |
 | 22 | „Alles“ (Migration 0005) | Bucket nach Laufzeit, Gruppieren in SQL, 1.000-Zeilen-Grenze |
+| 23 | Eigenes Schema `ampere_solar` (Migration 0006) | Standardschema des Clients, `.schema()`, `PGRST_DB_SCHEMAS`, `USAGE` |
 
 Die zunächst geplante Technik-Seite entfällt zugunsten der Ersparnis-Seite.
 

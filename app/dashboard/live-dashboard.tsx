@@ -73,7 +73,7 @@ export function LiveDashboard({
         // Generic = Zeilentyp → payload.new ist typisiert statt `any`.
         .on<Tables<"solar_readings">>(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "solar_readings" },
+          { event: "INSERT", schema: "ampere_solar", table: "solar_readings" },
           (payload) => {
             // Bei fehlenden Rechten ist payload.new leer und der Grund steht
             // in payload.errors – dann den alten Wert stehen lassen.
