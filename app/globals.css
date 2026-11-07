@@ -123,6 +123,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Mit viewport-fit=cover reicht die Seite unter Notch/Home-Indikator;
+       env() liefert deren Größe (0 auf Geräten ohne). */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   html {
     @apply font-sans;

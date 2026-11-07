@@ -24,7 +24,8 @@ export const config = {
      * Auf alle Pfade anwenden, AUSSER:
      * - _next/static  (gebündeltes JS/CSS)
      * - _next/image   (Bildoptimierung)
-     * - favicon.ico
+     * - favicon.ico und manifest.webmanifest (Safari lädt sie ohne Session;
+     *   ein Redirect auf /login würde die Installation als App verhindern)
      * - .well-known   (öffentliche Metadaten, z. B. für OAuth-Discovery)
      * - statische Dateien mit Bild-Endungen (aus /public)
      *
@@ -33,6 +34,6 @@ export const config = {
      * Für diese Dateien braucht es keine Session – das spart unnötige
      * Aufrufe beim Auth-Server.
      */
-    "/((?!_next/static|_next/image|favicon.ico|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest\\.webmanifest|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

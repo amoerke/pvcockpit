@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Platzhalter-Logo: Sonne mit Blitz auf dunklem Grund (voll deckend, ohne Rundung) -->
+  <rect width="512" height="512" fill="#0a0a0a"/>
+  <g transform="translate(256 256) scale(SCALE) translate(-256 -256)">
+    <circle cx="256" cy="256" r="120" fill="#f5b301"/>
+    <g stroke="#f5b301" stroke-width="22" stroke-linecap="round">
+      <path d="M256 76v36M256 400v36M76 256h36M400 256h36M129 129l26 26M357 357l26 26M129 383l26-26M357 155l26-26"/>
+    </g>
+    <path d="M276 190l-62 82h42l-18 60 66-86h-44z" fill="#0a0a0a"/>
+  </g>
+</svg>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -21,6 +21,25 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AmpereSolar Cockpit",
   description: "Statistiken zu den AmpereStorage-Werten",
+  // Für "Zum Home-Bildschirm" auf iOS. Next rendert daraus
+  // <meta name="mobile-web-app-capable"> (siehe `other` für das ältere Tag).
+  appleWebApp: {
+    capable: true,
+    title: "Cockpit",
+    // "default": Statusleiste bleibt opak, Inhalt rutscht nicht darunter.
+    statusBarStyle: "default",
+  },
+  // Ältere iOS-Versionen kennen nur das Apple-Präfix; Next erzeugt es nicht selbst.
+  other: { "apple-mobile-web-app-capable": "yes" },
+};
+
+export const viewport: Viewport = {
+  // Inhalt bis an die Display-Kanten; die Ränder sichert globals.css per env().
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

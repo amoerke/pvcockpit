@@ -104,3 +104,4 @@ Zustimmungsseite.
 - [Kapitel 3 – Docker](03-docker.md)
 - [Kapitel 4 – Chat mit MCP](04-chat.md)
 - [Kapitel 5 – OAuth für MCP](05-oauth.md)
+- [Kapitel 6 – Installierbare Web-App](06-pwa.md)
